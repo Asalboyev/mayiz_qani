@@ -18,6 +18,21 @@ async function request(path, options = {}) {
   return data;
 }
 
+async function uploadRequest(path, formData) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    body: formData,
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.detail || "Server xatosi");
+  }
+
+  return data;
+}
+
 export const api = {
   base: API_BASE,
 
@@ -64,6 +79,10 @@ export const api = {
     });
   },
 
+  createCitizenReportWithEvidence(formData) {
+    return uploadRequest("/citizen/reports/upload", formData);
+  },
+
   updateCitizenReportStatus(reportId, status, reviewNote = "", reviewedBy = "admin") {
     return request(`/citizen/reports/${reportId}/status`, {
       method: "PATCH",
@@ -78,4 +97,17 @@ export const api = {
   getAuditLogs() {
     return request("/audit/logs");
   },
+  registerCitizen(payload) {
+  return request("/citizens/register", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+},
+
+loginCitizen(phone) {
+  return request("/citizens/login", {
+    method: "POST",
+    body: JSON.stringify({ phone }),
+  });
+},
 };

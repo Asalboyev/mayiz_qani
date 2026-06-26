@@ -1,13 +1,11 @@
 import { useState } from "react";
 import { api } from "../api";
 
-function CitizenPortal({ onBack }) {
-  const [type, setType] = useState("anonymous");
-  const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
+function CitizenPortal({ citizen, onLogout }) {
   const [description, setDescription] = useState("");
   const [locationText, setLocationText] = useState("");
   const [evidenceNote, setEvidenceNote] = useState("");
+  const [evidenceFile, setEvidenceFile] = useState(null);
   const [success, setSuccess] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -16,26 +14,28 @@ function CitizenPortal({ onBack }) {
     setLoading(true);
 
     try {
-      const payload = {
-        reporter_type: type,
-        full_name: type === "identified" ? fullName : null,
-        phone: type === "identified" ? phone : null,
-        description,
-        location_text: locationText || null,
-        latitude: null,
-        longitude: null,
-        evidence_note: evidenceNote || null,
-      };
+      const formData = new FormData();
 
-      const data = await api.createCitizenReport(payload);
+      formData.append("reporter_type", "identified");
+      formData.append("full_name", citizen.full_name);
+      formData.append("phone", citizen.phone);
+      formData.append("description", description);
+      formData.append("location_text", locationText);
+      formData.append("evidence_note", evidenceNote);
+      formData.append("latitude", "");
+      formData.append("longitude", "");
+
+      if (evidenceFile) {
+        formData.append("evidence_file", evidenceFile);
+      }
+
+      const data = await api.createCitizenReportWithEvidence(formData);
       setSuccess(data.report);
 
-      setType("anonymous");
-      setFullName("");
-      setPhone("");
       setDescription("");
       setLocationText("");
       setEvidenceNote("");
+      setEvidenceFile(null);
     } catch (err) {
       alert(err.message);
     } finally {
@@ -57,8 +57,8 @@ function CitizenPortal({ onBack }) {
             Yana xabar yuborish
           </button>
 
-          <button className="secondary" onClick={onBack}>
-            Bosh sahifa
+          <button className="secondary" onClick={onLogout}>
+            Chiqish
           </button>
         </div>
       </div>
@@ -68,44 +68,22 @@ function CitizenPortal({ onBack }) {
   return (
     <div className="simple-page">
       <form className="card form-card wide" onSubmit={submit}>
-        <button type="button" className="link-button" onClick={onBack}>
-          ← Bosh sahifa
-        </button>
+        <div className="citizen-profile">
+          <img src={citizen.face_image} alt="FaceID" />
 
-        <h2>Fuqaro xabari</h2>
-        <p>Shubhali holat haqida operatorlarga xabar yuboring.</p>
+          <div>
+            <h2>{citizen.full_name}</h2>
+            <p>{citizen.phone}</p>
+            <span>{citizen.face_id}</span>
+          </div>
 
-        <div className="toggle">
-          <button
-            type="button"
-            className={type === "anonymous" ? "active" : ""}
-            onClick={() => setType("anonymous")}
-          >
-            Anonim
-          </button>
-
-          <button
-            type="button"
-            className={type === "identified" ? "active" : ""}
-            onClick={() => setType("identified")}
-          >
-            Ism bilan
+          <button type="button" className="secondary" onClick={onLogout}>
+            Chiqish
           </button>
         </div>
 
-        {type === "identified" && (
-          <div className="two-col">
-            <label>
-              Ism familiya
-              <input value={fullName} onChange={(e) => setFullName(e.target.value)} />
-            </label>
-
-            <label>
-              Telefon
-              <input value={phone} onChange={(e) => setPhone(e.target.value)} />
-            </label>
-          </div>
-        )}
+        <h2>Shubhali holat haqida xabar yuborish</h2>
+        <p>Rasm yuklasangiz operator panelida evidence sifatida ko‘rinadi.</p>
 
         <label>
           Xabar matni
@@ -127,11 +105,20 @@ function CitizenPortal({ onBack }) {
         </label>
 
         <label>
-          Qo‘shimcha dalil izohi
+          Shubhali holat rasmi
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)}
+          />
+        </label>
+
+        <label>
+          Qo‘shimcha izoh
           <textarea
             value={evidenceNote}
             onChange={(e) => setEvidenceNote(e.target.value)}
-            placeholder="Masalan: rasm/video bor, kerak bo‘lsa taqdim qilaman"
+            placeholder="Masalan: rasmda devor yonidagi joy ko‘rinadi"
           />
         </label>
 

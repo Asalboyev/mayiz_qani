@@ -550,6 +550,14 @@ function OperatorDashboard({ onLogout }) {
                   onClick={() => setImageModal(`${api.base}${selectedAlert.evidence_image_url}`)}
                 />
               )}
+              {selectedReport.evidence_image_url && (
+  <img
+    className="drawer-image"
+    src={`${api.base}${selectedReport.evidence_image_url}`}
+    alt="Citizen evidence"
+    onClick={() => setImageModal(`${api.base}${selectedReport.evidence_image_url}`)}
+  />
+)}
 
               <div className="detail-grid">
                 <div>
