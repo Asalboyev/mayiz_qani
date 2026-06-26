@@ -3,9 +3,11 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
+import base64
+import json
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -20,16 +22,29 @@ load_dotenv()
 app = FastAPI(
     title="SafeDrop AI Backend",
     description="Shubhali harakatlarni aniqlash uchun local MVP backend.",
-    version="0.3.0",
+    version="0.4.0",
 )
 
 EVIDENCE_DIR = Path("app/data/evidence")
 EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+CITIZENS_DIR = Path("app/data/citizens")
+CITIZEN_FACES_DIR = CITIZENS_DIR / "faces"
+CITIZENS_FILE = CITIZENS_DIR / "citizens.json"
+
+CITIZEN_FACES_DIR.mkdir(parents=True, exist_ok=True)
+
+if not CITIZENS_FILE.exists():
+    CITIZENS_FILE.write_text("[]", encoding="utf-8")
 
 app.mount(
     "/evidence",
     StaticFiles(directory=str(EVIDENCE_DIR)),
     name="evidence",
+)
+app.mount(
+    "/citizen-files",
+    StaticFiles(directory=str(CITIZENS_DIR)),
+    name="citizen-files",
 )
 
 app.add_middleware(
@@ -118,7 +133,7 @@ class OperatorLoginRequest(BaseModel):
 # =========================
 
 class CitizenSessionCreate(BaseModel):
-    access_type: str = Field(default="anonymous")  # anonymous / identified
+    access_type: str = Field(default="anonymous")
     full_name: Optional[str] = Field(default=None)
     phone: Optional[str] = Field(default=None)
 
@@ -130,9 +145,18 @@ class CitizenSession(BaseModel):
     full_name: Optional[str]
     phone: Optional[str]
 
+class CitizenRegisterRequest(BaseModel):
+    full_name: str
+    phone: str
+    face_image: str
+
+
+class CitizenLoginRequest(BaseModel):
+    phone: str
+
 
 class CitizenReportCreate(BaseModel):
-    reporter_type: str = Field(default="anonymous")  # anonymous / identified
+    reporter_type: str = Field(default="anonymous")
     full_name: Optional[str] = Field(default=None)
     phone: Optional[str] = Field(default=None)
     description: str = Field(default="")
@@ -155,6 +179,8 @@ class CitizenReport(BaseModel):
     longitude: Optional[float]
     evidence_note: Optional[str]
     status: str
+    evidence_image_path: Optional[str] = None
+    evidence_image_url: Optional[str] = None
     reviewed_by: Optional[str] = None
     reviewed_at: Optional[str] = None
     review_note: Optional[str] = None
@@ -229,6 +255,73 @@ def format_status(status: str) -> str:
 def now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
+def normalize_phone(phone: str) -> str:
+    digits = "".join(ch for ch in phone if ch.isdigit())
+
+    if digits.startswith("998"):
+        digits = digits[3:]
+
+    digits = digits[:9]
+
+    if len(digits) < 9:
+        raise HTTPException(
+            status_code=400,
+            detail="Telefon raqam to‘liq emas. Masalan: +998901234567",
+        )
+
+    return f"+998{digits}"
+
+
+def load_citizens() -> List[dict]:
+    try:
+        return json.loads(CITIZENS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+
+def save_citizens(citizens: List[dict]):
+    CITIZENS_FILE.write_text(
+        json.dumps(citizens, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def save_face_image(face_image: str, citizen_id: str) -> str:
+    if "," in face_image:
+        face_image = face_image.split(",", 1)[1]
+
+    try:
+        image_bytes = base64.b64decode(face_image)
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="FaceID rasmi noto‘g‘ri formatda",
+        )
+
+    filename = f"{citizen_id}.jpg"
+    path = CITIZEN_FACES_DIR / filename
+    path.write_bytes(image_bytes)
+
+    return f"/citizen-files/faces/{filename}"
+
+
+def parse_optional_float(value: Optional[str]) -> Optional[float]:
+    if value is None:
+        return None
+
+    value = str(value).strip()
+
+    if value == "":
+        return None
+
+    try:
+        return float(value)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Latitude yoki longitude noto‘g‘ri formatda",
+        )
+
 
 def add_audit_log(
     entity_type: str,
@@ -249,6 +342,37 @@ def add_audit_log(
 
     audit_logs.append(log)
     return log
+
+
+async def save_citizen_evidence(file: UploadFile):
+    allowed_extensions = {".jpg", ".jpeg", ".png", ".webp"}
+
+    original_name = file.filename or "evidence.jpg"
+    suffix = Path(original_name).suffix.lower()
+
+    if suffix not in allowed_extensions:
+        raise HTTPException(
+            status_code=400,
+            detail="Faqat jpg, jpeg, png yoki webp rasm yuklash mumkin",
+        )
+
+    content = await file.read()
+
+    max_size = 5 * 1024 * 1024
+    if len(content) > max_size:
+        raise HTTPException(
+            status_code=400,
+            detail="Rasm hajmi 5MB dan katta bo‘lishi mumkin emas",
+        )
+
+    filename = (
+        f"citizen_{datetime.now().strftime('%Y%m%d_%H%M%S')}_"
+        f"{uuid.uuid4().hex[:8]}{suffix}"
+    )
+    path = EVIDENCE_DIR / filename
+    path.write_bytes(content)
+
+    return str(path), f"/evidence/{filename}"
 
 
 # =========================
@@ -546,6 +670,105 @@ def create_citizen_report(payload: CitizenReportCreate):
     }
 
 
+@app.post("/citizen/reports/upload")
+async def create_citizen_report_upload(
+    reporter_type: str = Form(default="identified"),
+    full_name: Optional[str] = Form(default=None),
+    phone: Optional[str] = Form(default=None),
+    description: str = Form(default=""),
+    location_text: Optional[str] = Form(default=None),
+    latitude: Optional[str] = Form(default=None),
+    longitude: Optional[str] = Form(default=None),
+    evidence_note: Optional[str] = Form(default=None),
+    evidence_file: Optional[UploadFile] = File(default=None),
+):
+    if not description.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Xabar matni bo‘sh bo‘lishi mumkin emas",
+        )
+
+    if reporter_type not in {"anonymous", "identified"}:
+        raise HTTPException(
+            status_code=400,
+            detail="reporter_type faqat anonymous yoki identified bo‘lishi mumkin",
+        )
+
+    parsed_latitude = parse_optional_float(latitude)
+    parsed_longitude = parse_optional_float(longitude)
+
+    evidence_image_path = None
+    evidence_image_url = None
+
+    if evidence_file and evidence_file.filename:
+        evidence_image_path, evidence_image_url = await save_citizen_evidence(evidence_file)
+
+    report = CitizenReport(
+        id=str(uuid.uuid4()),
+        created_at=now_iso(),
+        source="citizen",
+        reporter_type=reporter_type,
+        full_name=full_name,
+        phone=phone,
+        description=description,
+        location_text=location_text,
+        latitude=parsed_latitude,
+        longitude=parsed_longitude,
+        evidence_note=evidence_note,
+        status="new",
+        evidence_image_path=evidence_image_path,
+        evidence_image_url=evidence_image_url,
+    )
+
+    citizen_reports.append(report)
+
+    reporter_label = "Anonim fuqaro"
+    if report.reporter_type == "identified":
+        reporter_label = report.full_name or "Fuqaro"
+
+    location_label = report.location_text or "Ko‘rsatilmagan"
+    coordinate_label = "-"
+    if report.latitude is not None and report.longitude is not None:
+        coordinate_label = f"{report.latitude}, {report.longitude}"
+
+    message = f"""
+📩 <b>Fuqaro xabari</b>
+
+<b>Manba:</b> Fuqaro portali
+<b>Yuboruvchi:</b> {reporter_label}
+<b>Telefon:</b> {report.phone or "-"}
+<b>Vaqt:</b> {report.created_at}
+
+<b>Joy:</b> {location_label}
+<b>Koordinata:</b> {coordinate_label}
+
+<b>Xabar matni:</b>
+{report.description}
+
+<b>Qo‘shimcha dalil:</b>
+{report.evidence_note or "-"}
+
+<b>Rasm:</b> {"Bor" if report.evidence_image_url else "Yo‘q"}
+<b>Holat:</b> {format_status(report.status)}
+""".strip()
+
+    if report.evidence_image_path:
+        telegram_message_result = send_photo(report.evidence_image_path, message)
+    else:
+        telegram_message_result = send_message(message)
+
+    telegram_location_result = None
+    if report.latitude is not None and report.longitude is not None:
+        telegram_location_result = send_location(report.latitude, report.longitude)
+
+    return {
+        "ok": True,
+        "report": report,
+        "telegram_message": telegram_message_result,
+        "telegram_location": telegram_location_result,
+    }
+
+
 @app.patch("/citizen/reports/{report_id}/status")
 def update_citizen_report_status(report_id: str, payload: CitizenReportStatusUpdate):
     allowed_statuses = {
@@ -608,7 +831,72 @@ def update_citizen_report_status(report_id: str, payload: CitizenReportStatusUpd
         status_code=404,
         detail="Fuqaro xabari topilmadi",
     )
+@app.post("/citizens/register")
+def register_citizen(payload: CitizenRegisterRequest):
+    full_name = payload.full_name.strip()
 
+    if not full_name:
+        raise HTTPException(
+            status_code=400,
+            detail="Ism familiya kiritilishi kerak",
+        )
+
+    phone = normalize_phone(payload.phone)
+    citizens = load_citizens()
+
+    for citizen in citizens:
+        if citizen["phone"] == phone:
+            raise HTTPException(
+                status_code=400,
+                detail="Bu telefon raqam oldin ro‘yxatdan o‘tgan",
+            )
+
+    citizen_id = f"CIT-{uuid.uuid4().hex[:10].upper()}"
+    face_id = f"FACE-{uuid.uuid4().hex[:8].upper()}"
+    face_image_url = save_face_image(payload.face_image, citizen_id)
+
+    citizen = {
+        "id": citizen_id,
+        "face_id": face_id,
+        "full_name": full_name,
+        "phone": phone,
+        "face_image_url": face_image_url,
+        "created_at": now_iso(),
+    }
+
+    citizens.append(citizen)
+    save_citizens(citizens)
+
+    return {
+        "ok": True,
+        "citizen": citizen,
+    }
+
+
+@app.post("/citizens/login")
+def login_citizen(payload: CitizenLoginRequest):
+    phone = normalize_phone(payload.phone)
+    citizens = load_citizens()
+
+    for citizen in citizens:
+        if citizen["phone"] == phone:
+            return {
+                "ok": True,
+                "citizen": citizen,
+            }
+
+    raise HTTPException(
+        status_code=404,
+        detail="Bu telefon raqam bo‘yicha user topilmadi",
+    )
+
+
+@app.get("/citizens")
+def get_citizens():
+    return {
+        "count": len(load_citizens()),
+        "citizens": load_citizens(),
+    }
 
 # =========================
 # AUDIT LOGS
