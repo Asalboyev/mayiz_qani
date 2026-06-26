@@ -216,11 +216,8 @@ function Landing({ onCitizenLogin, onOperator }) {
       <div className="landing-box auth-box">
         <div className="logo">SD</div>
 
-        <h1>SafeDrop AI</h1>
-        <p>
-          Fuqarolar shubhali holat haqida xabar yuboradi, operatorlar esa ularni
-          tekshiradi.
-        </p>
+        <h1>Mayiz Qani</h1>
+        
 
         <div className="auth-tabs">
           <button
@@ -242,12 +239,7 @@ function Landing({ onCitizenLogin, onOperator }) {
 
         {mode === "register" ? (
           <form className="card form-card wide" onSubmit={registerCitizen}>
-            <h2>Fuqaro ro‘yxatdan o‘tishi</h2>
-            <p>
-              Demo FaceID kamera orqali olinadi va backend data folder ichida
-              saqlanadi.
-            </p>
-
+           
             <div className="two-col">
               <label>
                 Ism familiya

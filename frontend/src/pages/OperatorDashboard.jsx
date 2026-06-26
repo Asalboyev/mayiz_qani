@@ -15,6 +15,20 @@ function statusText(status) {
   return map[status] || status;
 }
 
+function statusClass(status) {
+  const map = {
+    new: "status-new",
+    reviewing: "status-reviewing",
+    confirmed: "status-confirmed",
+    rejected: "status-rejected",
+    operator_tekshiruvi_talab_qilinadi: "status-reviewing",
+    tasdiqlandi: "status-confirmed",
+    rad_etildi: "status-rejected",
+  };
+
+  return map[status] || "status-new";
+}
+
 function formatTime(value) {
   if (!value) return "-";
   return String(value).replace("T", " ");
@@ -47,7 +61,17 @@ function OperatorDashboard({ onLogout }) {
   const [health, setHealth] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const [reports, setReports] = useState([]);
-  const [auditLogs, setAuditLogs] = useState([]);
+  const [faceRecords, setFaceRecords] = useState([]);
+  const [faceFilter, setFaceFilter] = useState("all");
+  const [showFaceForm, setShowFaceForm] = useState(false);
+  const [newFace, setNewFace] = useState({
+    full_name: "",
+    phone: "",
+    risk_level: "unknown",
+    note: "",
+    face_image: "",
+  });
+  const [reportFilter, setReportFilter] = useState("all");
 
   const [cameras, setCameras] = useState(loadSavedCameras);
   const [selectedCameraId, setSelectedCameraId] = useState("CAM-01");
@@ -71,27 +95,48 @@ function OperatorDashboard({ onLogout }) {
     return cameras.find((camera) => camera.id === selectedCameraId) || cameras[0];
   }, [cameras, selectedCameraId]);
 
+  const reportCounts = useMemo(() => {
+    return {
+      all: reports.length,
+      new: reports.filter((item) => item.status === "new").length,
+      reviewing: reports.filter((item) => item.status === "reviewing").length,
+      confirmed: reports.filter((item) => item.status === "confirmed").length,
+      rejected: reports.filter((item) => item.status === "rejected").length,
+    };
+  }, [reports]);
+
+  const filteredReports = useMemo(() => {
+    if (reportFilter === "all") {
+      return reports;
+    }
+
+    return reports.filter((report) => report.status === reportFilter);
+  }, [reports, reportFilter]);
+
   async function loadData() {
     try {
-      const [healthData, alertData, reportData, auditData] = await Promise.all([
+      const [healthData, alertData, reportData, faceData] = await Promise.all([
         api.health(),
         api.getAlerts(),
         api.getCitizenReports(),
-        api.getAuditLogs(),
+        api.getFaceIdRecords(),
       ]);
 
+      const nextAlerts = alertData.alerts || [];
+      const nextReports = reportData.reports || [];
+
       setHealth(healthData);
-      setAlerts(alertData.alerts || []);
-      setReports(reportData.reports || []);
-      setAuditLogs(auditData.logs || []);
+      setAlerts(nextAlerts);
+      setReports(nextReports);
+      setFaceRecords(faceData.records || []);
 
       if (selectedAlert) {
-        const freshAlert = (alertData.alerts || []).find((item) => item.id === selectedAlert.id);
+        const freshAlert = nextAlerts.find((item) => item.id === selectedAlert.id);
         if (freshAlert) setSelectedAlert(freshAlert);
       }
 
       if (selectedReport) {
-        const freshReport = (reportData.reports || []).find((item) => item.id === selectedReport.id);
+        const freshReport = nextReports.find((item) => item.id === selectedReport.id);
         if (freshReport) setSelectedReport(freshReport);
       }
     } catch (err) {
@@ -197,7 +242,7 @@ function OperatorDashboard({ onLogout }) {
   return (
     <div className="dashboard">
       <aside className="dash-sidebar">
-        <h2>SafeDrop AI</h2>
+        <h2>Mayiz Qani</h2>
         <p>Operator console</p>
 
         <button className={tab === "ai" ? "active" : ""} onClick={() => setTab("ai")}>
@@ -219,10 +264,10 @@ function OperatorDashboard({ onLogout }) {
         </button>
 
         <button
-          className={tab === "audit" ? "active" : ""}
-          onClick={() => setTab("audit")}
+          className={tab === "faceid" ? "active" : ""}
+          onClick={() => setTab("faceid")}
         >
-          Audit logs
+          Face ID baza
         </button>
 
         <button onClick={onLogout}>Chiqish</button>
@@ -299,7 +344,9 @@ function OperatorDashboard({ onLogout }) {
 
                       <div className="mini-meta">
                         <span>{formatTime(alert.created_at)}</span>
-                        <span>{statusText(alert.status)}</span>
+                        <span className={`status-badge ${statusClass(alert.status)}`}>
+                          {statusText(alert.status)}
+                        </span>
                       </div>
                     </div>
                   </button>
@@ -456,11 +503,53 @@ function OperatorDashboard({ onLogout }) {
               </div>
             </div>
 
-            {reports.length === 0 ? (
-              <p className="muted">Hozircha xabar yo‘q.</p>
+            <div className="report-filters">
+              <button
+                className={reportFilter === "all" ? "active" : ""}
+                onClick={() => setReportFilter("all")}
+              >
+                Hammasi
+                <span>{reportCounts.all}</span>
+              </button>
+
+              <button
+                className={reportFilter === "new" ? "active" : ""}
+                onClick={() => setReportFilter("new")}
+              >
+                Yangi
+                <span>{reportCounts.new}</span>
+              </button>
+
+              <button
+                className={reportFilter === "reviewing" ? "active" : ""}
+                onClick={() => setReportFilter("reviewing")}
+              >
+                Ko‘rib chiqilmoqda
+                <span>{reportCounts.reviewing}</span>
+              </button>
+
+              <button
+                className={reportFilter === "confirmed" ? "active" : ""}
+                onClick={() => setReportFilter("confirmed")}
+              >
+                Tasdiqlandi
+                <span>{reportCounts.confirmed}</span>
+              </button>
+
+              <button
+                className={reportFilter === "rejected" ? "active" : ""}
+                onClick={() => setReportFilter("rejected")}
+              >
+                Rad etildi
+                <span>{reportCounts.rejected}</span>
+              </button>
+            </div>
+
+            {filteredReports.length === 0 ? (
+              <p className="muted">Bu filter bo‘yicha xabar yo‘q.</p>
             ) : (
               <div className="report-grid">
-                {reports.map((report) => (
+                {filteredReports.map((report) => (
                   <button
                     className="report-preview"
                     key={report.id}
@@ -468,7 +557,9 @@ function OperatorDashboard({ onLogout }) {
                   >
                     <div className="item-top">
                       <strong>{report.location_text || "Joylashuv ko‘rsatilmagan"}</strong>
-                      <span>{statusText(report.status)}</span>
+                      <span className={`status-badge ${statusClass(report.status)}`}>
+                        {statusText(report.status)}
+                      </span>
                     </div>
 
                     <p>{report.description}</p>
@@ -486,30 +577,206 @@ function OperatorDashboard({ onLogout }) {
           </div>
         )}
 
-        {tab === "audit" && (
+        {tab === "faceid" && (
           <div className="card">
-            <h3>Audit logs</h3>
-            <p className="muted">Operatorlar qilgan tasdiqlash/rad etish ishlari.</p>
-
-            {auditLogs.length === 0 ? (
-              <p className="muted">Hozircha audit log yo‘q.</p>
-            ) : (
-              <div className="list">
-                {auditLogs.map((log) => (
-                  <div className="item" key={log.id}>
-                    <div className="item-top">
-                      <strong>{log.entity_type}</strong>
-                      <span>{log.action}</span>
-                    </div>
-
-                    <p>{log.note || "Izoh yo‘q"}</p>
-                    <small>
-                      Operator: {log.operator} · {formatTime(log.created_at)}
-                    </small>
-                  </div>
-                ))}
+            <div className="section-head">
+              <div>
+                <h3>Face ID baza</h3>
+                <p>Ro‘yxatdan o‘tgan fuqarolar va operator qo‘shgan shaxslar.</p>
               </div>
+
+              <button
+                className="secondary"
+                onClick={() => setShowFaceForm((prev) => !prev)}
+              >
+                {showFaceForm ? "Yopish" : "Odam qo‘shish"}
+              </button>
+            </div>
+
+            <div className="report-filters">
+              <button
+                className={faceFilter === "all" ? "active" : ""}
+                onClick={() => setFaceFilter("all")}
+              >
+                Hammasi
+                <span>{faceRecords.length}</span>
+              </button>
+
+              <button
+                className={faceFilter === "citizen" ? "active" : ""}
+                onClick={() => setFaceFilter("citizen")}
+              >
+                Ro‘yxatdan o‘tganlar
+                <span>{faceRecords.filter((item) => item.source === "citizen").length}</span>
+              </button>
+
+              <button
+                className={faceFilter === "manual" ? "active" : ""}
+                onClick={() => setFaceFilter("manual")}
+              >
+                Operator qo‘shganlar
+                <span>{faceRecords.filter((item) => item.source === "manual").length}</span>
+              </button>
+            </div>
+
+            {showFaceForm && (
+              <form
+                className="faceid-form"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+
+                  if (!newFace.face_image) {
+                    alert("Yuz rasmi yuklang");
+                    return;
+                  }
+
+                  await api.createFaceIdRecord({
+                    full_name: newFace.full_name,
+                    phone: newFace.phone || null,
+                    risk_level: newFace.risk_level,
+                    note: newFace.note || null,
+                    source: "manual",
+                    face_image: newFace.face_image,
+                  });
+
+                  setNewFace({
+                    full_name: "",
+                    phone: "",
+                    risk_level: "unknown",
+                    note: "",
+                    face_image: "",
+                  });
+
+                  setShowFaceForm(false);
+                  await loadData();
+                }}
+              >
+                <div className="two-col">
+                  <label>
+                    Ism familiya
+                    <input
+                      value={newFace.full_name}
+                      onChange={(e) =>
+                        setNewFace((prev) => ({ ...prev, full_name: e.target.value }))
+                      }
+                      placeholder="Masalan: Ali Karimov"
+                    />
+                  </label>
+
+                  <label>
+                    Telefon
+                    <input
+                      value={newFace.phone}
+                      onChange={(e) =>
+                        setNewFace((prev) => ({ ...prev, phone: e.target.value }))
+                      }
+                      placeholder="+998..."
+                    />
+                  </label>
+                </div>
+
+                <div className="two-col">
+                  <label>
+                    Risk darajasi
+                    <select
+                      value={newFace.risk_level}
+                      onChange={(e) =>
+                        setNewFace((prev) => ({ ...prev, risk_level: e.target.value }))
+                      }
+                    >
+                      <option value="unknown">Noma’lum</option>
+                      <option value="low">Past</option>
+                      <option value="medium">O‘rta</option>
+                      <option value="high">Yuqori</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Yuz rasmi
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                          setNewFace((prev) => ({
+                            ...prev,
+                            face_image: reader.result,
+                          }));
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                  </label>
+                </div>
+
+                {newFace.face_image && (
+                  <img className="faceid-preview" src={newFace.face_image} alt="preview" />
+                )}
+
+                <label>
+                  Izoh
+                  <textarea
+                    value={newFace.note}
+                    onChange={(e) =>
+                      setNewFace((prev) => ({ ...prev, note: e.target.value }))
+                    }
+                    placeholder="Masalan: kuzatuv ro‘yxatiga qo‘shildi"
+                  />
+                </label>
+
+                <button className="primary">Bazaga qo‘shish</button>
+              </form>
             )}
+
+            <div className="faceid-grid">
+  {faceRecords
+    .filter((item) => faceFilter === "all" || item.source === faceFilter)
+    .map((record) => {
+      const imageUrl = `${api.base}${record.face_image_url}`;
+
+      return (
+        <div className="faceid-card" key={record.id}>
+          <button
+            type="button"
+            className="faceid-photo-button"
+            onClick={() => setImageModal(imageUrl)}
+          >
+            <img src={imageUrl} alt={record.full_name} />
+          </button>
+
+          <div className="faceid-card-body">
+            <div className="faceid-card-top">
+              <div>
+                <strong>{record.full_name}</strong>
+                <p>{record.phone || "Telefon yo‘q"}</p>
+              </div>
+
+              <span
+                className={
+                  record.source === "citizen"
+                    ? "face-source citizen"
+                    : "face-source manual"
+                }
+              >
+                {record.source === "citizen" ? "Fuqaro" : "Operator"}
+              </span>
+            </div>
+
+            <div className="faceid-meta">
+              <span>{record.id}</span>
+              <span>{record.risk_level || "unknown"}</span>
+            </div>
+
+            <small>{record.note || "Izoh yo‘q"}</small>
+          </div>
+        </div>
+      );
+    })}
+</div>
           </div>
         )}
 
@@ -550,13 +817,38 @@ function OperatorDashboard({ onLogout }) {
                   onClick={() => setImageModal(`${api.base}${selectedAlert.evidence_image_url}`)}
                 />
               )}
-              {selectedReport.evidence_image_url && (
-  <img
-    className="drawer-image"
-    src={`${api.base}${selectedReport.evidence_image_url}`}
-    alt="Citizen evidence"
-    onClick={() => setImageModal(`${api.base}${selectedReport.evidence_image_url}`)}
-  />
+              {selectedAlert.evidence_video_url && (
+  <div className="drawer-section">
+    <span>Incident video</span>
+    <video
+      className="incident-video"
+      src={`${api.base}${selectedAlert.evidence_video_url}`}
+      controls
+      playsInline
+    />
+  </div>
+)}
+              {selectedAlert.evidence_gallery_urls?.length > 0 && (
+  <div className="drawer-section">
+    <span>Evidence gallery</span>
+
+    <div className="evidence-gallery">
+      {selectedAlert.evidence_gallery_urls.map((url, index) => {
+        const imageUrl = `${api.base}${url}`;
+
+        return (
+          <button
+            type="button"
+            key={`${url}-${index}`}
+            onClick={() => setImageModal(imageUrl)}
+          >
+            <img src={imageUrl} alt={`Evidence frame ${index + 1}`} />
+            <small>Frame {index + 1}</small>
+          </button>
+        );
+      })}
+    </div>
+  </div>
 )}
 
               <div className="detail-grid">
@@ -596,7 +888,9 @@ function OperatorDashboard({ onLogout }) {
 
                 <div>
                   <span>Status</span>
-                  <strong>{statusText(selectedAlert.status)}</strong>
+                  <strong className={`status-badge ${statusClass(selectedAlert.status)}`}>
+                    {statusText(selectedAlert.status)}
+                  </strong>
                 </div>
 
                 <div>
@@ -645,6 +939,15 @@ function OperatorDashboard({ onLogout }) {
                 <button onClick={() => setSelectedReport(null)}>Yopish</button>
               </div>
 
+              {selectedReport.evidence_image_url && (
+                <img
+                  className="drawer-image"
+                  src={`${api.base}${selectedReport.evidence_image_url}`}
+                  alt="Citizen evidence"
+                  onClick={() => setImageModal(`${api.base}${selectedReport.evidence_image_url}`)}
+                />
+              )}
+
               <div className="detail-grid">
                 <div>
                   <span>Yuboruvchi</span>
@@ -681,7 +984,9 @@ function OperatorDashboard({ onLogout }) {
 
                 <div>
                   <span>Status</span>
-                  <strong>{statusText(selectedReport.status)}</strong>
+                  <strong className={`status-badge ${statusClass(selectedReport.status)}`}>
+                    {statusText(selectedReport.status)}
+                  </strong>
                 </div>
 
                 <div>
@@ -736,12 +1041,19 @@ function OperatorDashboard({ onLogout }) {
 
         {reviewModal && (
           <div className="review-backdrop" onClick={() => setReviewModal(null)}>
-            <form className="review-box" onSubmit={(e) => e.preventDefault()} onClick={(e) => e.stopPropagation()}>
+            <form
+              className="review-box"
+              onSubmit={(e) => e.preventDefault()}
+              onClick={(e) => e.stopPropagation()}
+            >
               <h2>Operator qarori</h2>
               <p>{reviewModal.title}</p>
 
               <div className="review-status">
-                Qaror: <b>{statusText(reviewModal.status)}</b>
+                Qaror:{" "}
+                <b className={`status-badge ${statusClass(reviewModal.status)}`}>
+                  {statusText(reviewModal.status)}
+                </b>
               </div>
 
               <label>

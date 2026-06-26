@@ -97,17 +97,29 @@ export const api = {
   getAuditLogs() {
     return request("/audit/logs");
   },
-  registerCitizen(payload) {
-  return request("/citizens/register", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-},
 
-loginCitizen(phone) {
-  return request("/citizens/login", {
-    method: "POST",
-    body: JSON.stringify({ phone }),
-  });
-},
+  getFaceIdRecords(source = "all") {
+    return request(`/faceid/records?source=${source}`);
+  },
+
+  createFaceIdRecord(payload) {
+    return request("/faceid/records", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  registerCitizen(payload) {
+    return request("/citizens/register", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  loginCitizen(phone) {
+    return request("/citizens/login", {
+      method: "POST",
+      body: JSON.stringify({ phone }),
+    });
+  },
 };

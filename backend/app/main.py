@@ -22,11 +22,12 @@ load_dotenv()
 app = FastAPI(
     title="SafeDrop AI Backend",
     description="Shubhali harakatlarni aniqlash uchun local MVP backend.",
-    version="0.4.0",
+    version="0.4.1",
 )
 
 EVIDENCE_DIR = Path("app/data/evidence")
 EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+
 CITIZENS_DIR = Path("app/data/citizens")
 CITIZEN_FACES_DIR = CITIZENS_DIR / "faces"
 CITIZENS_FILE = CITIZENS_DIR / "citizens.json"
@@ -36,15 +37,31 @@ CITIZEN_FACES_DIR.mkdir(parents=True, exist_ok=True)
 if not CITIZENS_FILE.exists():
     CITIZENS_FILE.write_text("[]", encoding="utf-8")
 
+FACEID_DIR = Path("app/data/faceid")
+FACEID_FACES_DIR = FACEID_DIR / "faces"
+FACEID_FILE = FACEID_DIR / "faceid_records.json"
+
+FACEID_FACES_DIR.mkdir(parents=True, exist_ok=True)
+
+if not FACEID_FILE.exists():
+    FACEID_FILE.write_text("[]", encoding="utf-8")
+
 app.mount(
     "/evidence",
     StaticFiles(directory=str(EVIDENCE_DIR)),
     name="evidence",
 )
+
 app.mount(
     "/citizen-files",
     StaticFiles(directory=str(CITIZENS_DIR)),
     name="citizen-files",
+)
+
+app.mount(
+    "/faceid-files",
+    StaticFiles(directory=str(FACEID_DIR)),
+    name="faceid-files",
 )
 
 app.add_middleware(
@@ -67,35 +84,67 @@ class AlertCreate(BaseModel):
     camera_name: str = Field(default="Guliston Test Kamerasi 01")
     latitude: float = Field(default=40.4897)
     longitude: float = Field(default=68.7842)
+
     person_id: str = Field(default="P-001")
     face_match_name: Optional[str] = Field(default="Demo Shaxs")
     face_match_score: Optional[float] = Field(default=76.0)
+
     confidence: float = Field(default=82.0)
     action: str = Field(
-        default="Shaxs bir joyda to‘xtadi, egildi, qo‘lini yerga yaqin olib bordi va hududdan chiqib ketdi"
+        default="AI kamera shubhali harakat patternini aniqladi."
     )
     status: str = Field(default="operator_tekshiruvi_talab_qilinadi")
+
     evidence_image_path: Optional[str] = Field(default=None)
     evidence_image_url: Optional[str] = Field(default=None)
+
+    event_type: Optional[str] = Field(default=None)
+    risk_reasons: List[str] = Field(default_factory=list)
+
+    zoom_image_path: Optional[str] = Field(default=None)
+    zoom_image_url: Optional[str] = Field(default=None)
+
+    face_image_path: Optional[str] = Field(default=None)
+    face_image_url: Optional[str] = Field(default=None)
+
+    evidence_gallery_paths: List[str] = Field(default_factory=list)
+    evidence_gallery_urls: List[str] = Field(default_factory=list)
 
 
 class Alert(BaseModel):
     id: str
     created_at: str
+
     camera_name: str
     latitude: float
     longitude: float
+
     person_id: str
     face_match_name: Optional[str]
     face_match_score: Optional[float]
+
     confidence: float
     action: str
     status: str
+
     evidence_image_path: Optional[str]
     evidence_image_url: Optional[str]
+
     reviewed_by: Optional[str] = None
     reviewed_at: Optional[str] = None
     review_note: Optional[str] = None
+
+    event_type: Optional[str] = None
+    risk_reasons: List[str] = Field(default_factory=list)
+
+    zoom_image_path: Optional[str] = None
+    zoom_image_url: Optional[str] = None
+
+    face_image_path: Optional[str] = None
+    face_image_url: Optional[str] = None
+
+    evidence_gallery_paths: List[str] = Field(default_factory=list)
+    evidence_gallery_urls: List[str] = Field(default_factory=list)
 
 
 class AlertStatusUpdate(BaseModel):
@@ -117,6 +166,19 @@ class DemoFaceProfile(BaseModel):
     camera_name: str
     last_seen: str
     note: str
+
+
+# =========================
+# FACE ID DATABASE MODELS
+# =========================
+
+class FaceIdRecordCreate(BaseModel):
+    full_name: str
+    phone: Optional[str] = Field(default=None)
+    risk_level: str = Field(default="unknown")
+    source: str = Field(default="manual")  # citizen / manual
+    note: Optional[str] = Field(default=None)
+    face_image: str
 
 
 # =========================
@@ -144,6 +206,7 @@ class CitizenSession(BaseModel):
     access_type: str
     full_name: Optional[str]
     phone: Optional[str]
+
 
 class CitizenRegisterRequest(BaseModel):
     full_name: str
@@ -179,8 +242,10 @@ class CitizenReport(BaseModel):
     longitude: Optional[float]
     evidence_note: Optional[str]
     status: str
+
     evidence_image_path: Optional[str] = None
     evidence_image_url: Optional[str] = None
+
     reviewed_by: Optional[str] = None
     reviewed_at: Optional[str] = None
     review_note: Optional[str] = None
@@ -249,11 +314,46 @@ def format_status(status: str) -> str:
         "confirmed": "Tasdiqlandi",
         "rejected": "Rad etildi",
     }
+
     return statuses.get(status, status)
 
 
 def now_iso() -> str:
     return datetime.now().isoformat(timespec="seconds")
+
+
+def load_faceid_records() -> List[dict]:
+    try:
+        return json.loads(FACEID_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+
+def save_faceid_records(records: List[dict]):
+    FACEID_FILE.write_text(
+        json.dumps(records, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def save_faceid_base64_image(face_image: str, prefix: str) -> str:
+    if "," in face_image:
+        face_image = face_image.split(",", 1)[1]
+
+    try:
+        image_bytes = base64.b64decode(face_image)
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="FaceID rasmi noto‘g‘ri formatda",
+        )
+
+    filename = f"{prefix}_{uuid.uuid4().hex[:10]}.jpg"
+    path = FACEID_FACES_DIR / filename
+    path.write_bytes(image_bytes)
+
+    return f"/faceid-files/faces/{filename}"
+
 
 def normalize_phone(phone: str) -> str:
     digits = "".join(ch for ch in phone if ch.isdigit())
@@ -341,6 +441,7 @@ def add_audit_log(
     }
 
     audit_logs.append(log)
+
     return log
 
 
@@ -359,6 +460,7 @@ async def save_citizen_evidence(file: UploadFile):
     content = await file.read()
 
     max_size = 5 * 1024 * 1024
+
     if len(content) > max_size:
         raise HTTPException(
             status_code=400,
@@ -369,6 +471,7 @@ async def save_citizen_evidence(file: UploadFile):
         f"citizen_{datetime.now().strftime('%Y%m%d_%H%M%S')}_"
         f"{uuid.uuid4().hex[:8]}{suffix}"
     )
+
     path = EVIDENCE_DIR / filename
     path.write_bytes(content)
 
@@ -479,6 +582,7 @@ def update_alert_status(alert_id: str, payload: AlertStatusUpdate):
 <b>Ko‘rib chiqqan operator:</b> {alert.reviewed_by}
 <b>Review vaqti:</b> {alert.reviewed_at}
 
+<b>Event turi:</b> {alert.event_type or "-"}
 <b>Holat:</b> {format_status(alert.status)}
 <b>Izoh:</b> {alert.review_note or "-"}
 """.strip()
@@ -506,6 +610,13 @@ def create_alert(payload: AlertCreate):
 
     alerts.append(alert)
 
+    risk_reason_text = "-"
+
+    if alert.risk_reasons:
+        risk_reason_text = "\n".join([f"• {reason}" for reason in alert.risk_reasons])
+
+    gallery_count = len(alert.evidence_gallery_urls)
+
     message = f"""
 🚨 <b>SafeDrop AI ogohlantirishi</b>
 
@@ -517,10 +628,16 @@ def create_alert(payload: AlertCreate):
 <b>Aniqlangan shubhali harakat:</b>
 {alert.action}
 
+<b>Event turi:</b> {alert.event_type or "-"}
+
+<b>Risk sabablari:</b>
+{risk_reason_text}
+
 <b>Shaxs ID:</b> {alert.person_id}
 <b>Demo FaceID mosligi:</b> {alert.face_match_name} — {alert.face_match_score}%
 
 <b>Ishonchlilik darajasi:</b> {alert.confidence}%
+<b>Photo evidence:</b> {gallery_count} ta qo‘shimcha frame
 <b>Holat:</b> {format_status(alert.status)}
 """.strip()
 
@@ -553,8 +670,16 @@ def create_demo_alert():
         face_match_name="Demo Foydalanuvchi 01",
         face_match_score=78.4,
         confidence=84.7,
-        action="Shaxs 7 soniya davomida bir joyda turdi, devor yonida egildi, qo‘lini yerga yaqin olib bordi va hududdan tez chiqib ketdi",
+        action=(
+            "AI kamera shubhali harakat patternini aniqladi. "
+            "Shaxs egilish/bukilish holatida pastki zona bilan shubhali harakat qildi."
+        ),
         status="operator_tekshiruvi_talab_qilinadi",
+        event_type="possible_hidden_drop",
+        risk_reasons=[
+            "Shaxs egildi yoki bukildi: pastki zona bilan shubhali harakat kuzatildi",
+            "Operator tekshiruvi talab qilinadi",
+        ],
     )
 
     return create_alert(payload)
@@ -628,11 +753,13 @@ def create_citizen_report(payload: CitizenReportCreate):
     citizen_reports.append(report)
 
     reporter_label = "Anonim fuqaro"
+
     if report.reporter_type == "identified":
         reporter_label = report.full_name or "Fuqaro"
 
     location_label = report.location_text or "Ko‘rsatilmagan"
     coordinate_label = "-"
+
     if report.latitude is not None and report.longitude is not None:
         coordinate_label = f"{report.latitude}, {report.longitude}"
 
@@ -659,6 +786,7 @@ def create_citizen_report(payload: CitizenReportCreate):
     telegram_message_result = send_message(message)
 
     telegram_location_result = None
+
     if report.latitude is not None and report.longitude is not None:
         telegram_location_result = send_location(report.latitude, report.longitude)
 
@@ -723,11 +851,13 @@ async def create_citizen_report_upload(
     citizen_reports.append(report)
 
     reporter_label = "Anonim fuqaro"
+
     if report.reporter_type == "identified":
         reporter_label = report.full_name or "Fuqaro"
 
     location_label = report.location_text or "Ko‘rsatilmagan"
     coordinate_label = "-"
+
     if report.latitude is not None and report.longitude is not None:
         coordinate_label = f"{report.latitude}, {report.longitude}"
 
@@ -758,6 +888,7 @@ async def create_citizen_report_upload(
         telegram_message_result = send_message(message)
 
     telegram_location_result = None
+
     if report.latitude is not None and report.longitude is not None:
         telegram_location_result = send_location(report.latitude, report.longitude)
 
@@ -801,6 +932,7 @@ def update_citizen_report_status(report_id: str, payload: CitizenReportStatusUpd
 
             if payload.status == "confirmed":
                 reporter_label = "Anonim fuqaro"
+
                 if report.reporter_type == "identified":
                     reporter_label = report.full_name or "Fuqaro"
 
@@ -831,6 +963,8 @@ def update_citizen_report_status(report_id: str, payload: CitizenReportStatusUpd
         status_code=404,
         detail="Fuqaro xabari topilmadi",
     )
+
+
 @app.post("/citizens/register")
 def register_citizen(payload: CitizenRegisterRequest):
     full_name = payload.full_name.strip()
@@ -867,6 +1001,24 @@ def register_citizen(payload: CitizenRegisterRequest):
     citizens.append(citizen)
     save_citizens(citizens)
 
+    face_records = load_faceid_records()
+
+    face_records.append(
+        {
+            "id": face_id,
+            "full_name": full_name,
+            "phone": phone,
+            "source": "citizen",
+            "risk_level": "registered",
+            "face_image_url": face_image_url,
+            "linked_citizen_id": citizen_id,
+            "created_at": now_iso(),
+            "note": "Fuqaro ro‘yxatdan o‘tganida avtomatik qo‘shilgan",
+        }
+    )
+
+    save_faceid_records(face_records)
+
     return {
         "ok": True,
         "citizen": citizen,
@@ -893,10 +1045,13 @@ def login_citizen(payload: CitizenLoginRequest):
 
 @app.get("/citizens")
 def get_citizens():
+    citizens = load_citizens()
+
     return {
-        "count": len(load_citizens()),
-        "citizens": load_citizens(),
+        "count": len(citizens),
+        "citizens": citizens,
     }
+
 
 # =========================
 # AUDIT LOGS
@@ -907,6 +1062,64 @@ def get_audit_logs():
     return {
         "count": len(audit_logs),
         "logs": list(reversed(audit_logs)),
+    }
+
+
+# =========================
+# FACE ID DATABASE
+# =========================
+
+@app.get("/faceid/records")
+def get_faceid_records(source: str = "all"):
+    records = load_faceid_records()
+
+    if source != "all":
+        records = [record for record in records if record.get("source") == source]
+
+    return {
+        "count": len(records),
+        "records": list(reversed(records)),
+    }
+
+
+@app.post("/faceid/records")
+def create_faceid_record(payload: FaceIdRecordCreate):
+    full_name = payload.full_name.strip()
+
+    if not full_name:
+        raise HTTPException(
+            status_code=400,
+            detail="Ism familiya kiritilishi kerak",
+        )
+
+    if payload.source not in {"manual", "citizen"}:
+        raise HTTPException(
+            status_code=400,
+            detail="source faqat manual yoki citizen bo‘lishi mumkin",
+        )
+
+    face_id = f"FACE-{uuid.uuid4().hex[:8].upper()}"
+    face_image_url = save_faceid_base64_image(payload.face_image, "manual")
+
+    record = {
+        "id": face_id,
+        "full_name": full_name,
+        "phone": payload.phone,
+        "source": payload.source,
+        "risk_level": payload.risk_level,
+        "face_image_url": face_image_url,
+        "linked_citizen_id": None,
+        "created_at": now_iso(),
+        "note": payload.note,
+    }
+
+    records = load_faceid_records()
+    records.append(record)
+    save_faceid_records(records)
+
+    return {
+        "ok": True,
+        "record": record,
     }
 
 
