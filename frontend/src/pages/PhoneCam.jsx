@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
-const BACKEND_URL = `${window.location.protocol}//${window.location.hostname}:8001`;
+// Backend always HTTP (no SSL cert), frontend may be HTTPS
+const BACKEND_URL = `http://${window.location.hostname}:8001`;
 
 export default function PhoneCam() {
   const videoRef = useRef(null);

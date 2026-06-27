@@ -1265,6 +1265,6 @@ def get_network_info():
     return {
         "lan_ip": lan_ip,
         "backend_url": f"http://{lan_ip}:8001",
-        "frontend_url": f"http://{lan_ip}:5173",
-        "phone_cam_url": f"http://{lan_ip}:5173/phone-cam",
+        "frontend_url": f"https://{lan_ip}:5173",
+        "phone_cam_url": f"https://{lan_ip}:5173/phone-cam",
     }
