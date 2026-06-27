@@ -33,7 +33,7 @@ YOLO_MODEL = os.getenv("YOLO_MODEL", "yolov8n.pt")
 YOLO_CONFIDENCE = float(os.getenv("YOLO_CONFIDENCE", "0.22"))
 YOLO_IMGSZ = int(os.getenv("YOLO_IMGSZ", "960"))
 
-ALERT_ENDPOINT = os.getenv("ALERT_ENDPOINT", "http://127.0.0.1:8000/alerts")
+ALERT_ENDPOINT = os.getenv("ALERT_ENDPOINT", "http://127.0.0.1:8001/alerts")
 
 CAMERA_NAME = os.getenv("CAMERA_NAME", "Guliston Test Kamerasi 01")
 CAMERA_LAT = float(os.getenv("CAMERA_LAT", "40.4897"))
