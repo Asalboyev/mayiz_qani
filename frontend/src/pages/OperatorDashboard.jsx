@@ -81,6 +81,8 @@ function OperatorDashboard({ onLogout }) {
   const [cameraDevices, setCameraDevices] = useState([]);
   const [showDevicePicker, setShowDevicePicker] = useState(false);
   const [reidTracks, setReidTracks] = useState([]);
+  const [phoneUrl, setPhoneUrl] = useState("");
+  const [localNetUrl, setLocalNetUrl] = useState("");
   const phoneVideoRef = useRef(null);
   const phoneStreamRef = useRef(null);
   const phoneCanvasRef = useRef(null);
@@ -93,6 +95,9 @@ function OperatorDashboard({ onLogout }) {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter((d) => d.kind === "videoinput");
       setCameraDevices(videoDevices);
+      // Compute local network URL for QR (replace localhost with LAN IP)
+      const url = `${window.location.protocol}//${window.location.hostname}:${window.location.port || 5173}`;
+      setLocalNetUrl(url);
       setShowDevicePicker(true);
     } catch {
       alert("Kamera ruxsati berilmadi");
@@ -713,25 +718,36 @@ async function loadFaceMatchForAlert(alertId) {
                           </button>
                         ))}
 
-                        {/* Extra: any index */}
+                        {/* Index buttons */}
                         <div style={{ borderTop: "1px solid #334", marginTop: "8px", paddingTop: "8px" }}>
                           <p style={{ fontSize: 11, color: "#666", margin: "0 0 6px" }}>Yoki index bo'yicha oching:</p>
                           <div style={{ display: "flex", gap: 4 }}>
                             {[0, 1, 2, 3].map((idx) => (
-                              <button
-                                key={idx}
-                                onClick={() => startPhoneCameraByIndex(idx)}
-                                style={{
-                                  flex: 1, padding: "6px 0",
-                                  background: "#1e3a5f", border: "1px solid #2563eb",
-                                  borderRadius: "6px", color: "#93c5fd",
-                                  cursor: "pointer", fontSize: 12
-                                }}
-                              >
+                              <button key={idx} onClick={() => startPhoneCameraByIndex(idx)}
+                                style={{ flex: 1, padding: "6px 0", background: "#1e3a5f", border: "1px solid #2563eb", borderRadius: "6px", color: "#93c5fd", cursor: "pointer", fontSize: 12 }}>
                                 #{idx}
                               </button>
                             ))}
                           </div>
+                        </div>
+
+                        {/* Phone via browser QR */}
+                        <div style={{ borderTop: "1px solid #334", marginTop: "8px", paddingTop: "8px" }}>
+                          <p style={{ fontSize: 11, color: "#aaa", margin: "0 0 6px" }}>📱 Telefondan ulash (brauzer orqali):</p>
+                          <div style={{
+                            background: "#fff", borderRadius: 8, padding: 8,
+                            display: "flex", justifyContent: "center", marginBottom: 6
+                          }}>
+                            <img
+                              src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(localNetUrl + "/phone-cam")}`}
+                              alt="QR"
+                              width={140} height={140}
+                              style={{ display: "block" }}
+                            />
+                          </div>
+                          <p style={{ fontSize: 10, color: "#666", textAlign: "center", margin: 0 }}>
+                            iPhone brauzerda {localNetUrl}/phone-cam oching
+                          </p>
                         </div>
 
                         <button onClick={() => setShowDevicePicker(false)}

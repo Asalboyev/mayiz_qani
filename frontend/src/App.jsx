@@ -5,8 +5,14 @@ import Landing from "./pages/Landing";
 import CitizenPortal from "./pages/CitizenPortal";
 import OperatorLogin from "./pages/OperatorLogin";
 import OperatorDashboard from "./pages/OperatorDashboard";
+import PhoneCam from "./pages/PhoneCam";
 
 function App() {
+  // /phone-cam path → directly show phone camera page
+  if (window.location.pathname === "/phone-cam") {
+    return <PhoneCam />;
+  }
+
   const [page, setPage] = useState("landing");
   const [citizen, setCitizen] = useState(() => {
     const saved = localStorage.getItem("safedrop_citizen");
