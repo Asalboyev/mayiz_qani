@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
-// Backend always HTTP (no SSL cert), frontend may be HTTPS
-const BACKEND_URL = `http://${window.location.hostname}:8001`;
+// Use Vite proxy — same origin HTTPS, proxy forwards to backend HTTP
+const BACKEND_URL = ``; // empty = same origin, /api prefix used below
 
 export default function PhoneCam() {
   const videoRef = useRef(null);
@@ -87,7 +87,7 @@ export default function PhoneCam() {
           try {
             const form = new FormData();
             form.append("file", blob, "frame.jpg");
-            const resp = await fetch(`${BACKEND_URL}/camera/analyze`, {
+            const resp = await fetch(`/api/camera/analyze`, {
               method: "POST",
               body: form,
               signal: AbortSignal.timeout(3000),

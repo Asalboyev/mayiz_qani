@@ -1,4 +1,5 @@
-const API_BASE = `${window.location.protocol}//${window.location.hostname}:8001`;
+// Use Vite proxy (/api → backend:8001) to avoid mixed-content HTTPS→HTTP block
+const API_BASE = `/api`;
 
 async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
