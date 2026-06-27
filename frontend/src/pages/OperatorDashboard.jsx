@@ -109,14 +109,26 @@ function OperatorDashboard({ onLogout }) {
         : { video: { facingMode: { ideal: "environment" }, width: 1280, height: 720 }, audio: false };
       const stream = await navigator.mediaDevices.getUserMedia(constraint);
       phoneStreamRef.current = stream;
-      setPhoneMode(true);
       setShowDevicePicker(false);
-      setTimeout(() => {
-        if (phoneVideoRef.current) {
-          phoneVideoRef.current.srcObject = stream;
-          phoneVideoRef.current.onloadedmetadata = () => startPhoneAiLoop();
-        }
-      }, 100);
+
+      // video is always in the DOM (hidden), assign immediately
+      const video = phoneVideoRef.current;
+      if (video) {
+        video.srcObject = stream;
+        let loopStarted = false;
+        const onReady = () => {
+          if (loopStarted) return;
+          loopStarted = true;
+          video.play().catch(() => {});
+          setPhoneMode(true);
+          startPhoneAiLoop();
+        };
+        video.onloadedmetadata = onReady;
+        video.oncanplay = onReady;
+        setTimeout(() => { if (!loopStarted) onReady(); }, 700);
+      } else {
+        setPhoneMode(true);
+      }
     } catch {
       alert("Kamera ochilmadi");
     }
@@ -130,8 +142,13 @@ function OperatorDashboard({ onLogout }) {
     async function loop() {
       if (!running || !phoneVideoRef.current) return;
       const video = phoneVideoRef.current;
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
+      if (!video.videoWidth) {
+        // Video hali tayyor emas, biroz kutamiz
+        phoneAnalyzeRef.current = setTimeout(loop, 200);
+        return;
+      }
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
       const ctx = canvas.getContext("2d");
       ctx.drawImage(video, 0, 0);
 
@@ -154,6 +171,42 @@ function OperatorDashboard({ onLogout }) {
 
     phoneAnalyzeRef.current = setTimeout(loop, 200);
     return () => { running = false; clearTimeout(phoneAnalyzeRef.current); };
+  }
+
+  async function startPhoneCameraByIndex(index) {
+    // Try opening camera by constraint index (some browsers support this)
+    if (phoneStreamRef.current) {
+      phoneStreamRef.current.getTracks().forEach((t) => t.stop());
+    }
+    try {
+      // Get all video devices and pick by index
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter((d) => d.kind === "videoinput");
+      if (videoDevices[index]) {
+        await startPhoneCamera(videoDevices[index].deviceId);
+      } else {
+        // Fallback: use generic constraint
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 1280, height: 720 },
+          audio: false,
+        });
+        phoneStreamRef.current = stream;
+        setShowDevicePicker(false);
+        const video = phoneVideoRef.current;
+        if (video) {
+          video.srcObject = stream;
+          let started = false;
+          const go = () => { if (!started) { started = true; video.play().catch(() => {}); setPhoneMode(true); startPhoneAiLoop(); } };
+          video.onloadedmetadata = go;
+          video.oncanplay = go;
+          setTimeout(() => go(), 700);
+        } else {
+          setPhoneMode(true);
+        }
+      }
+    } catch {
+      alert(`Kamera #${index} ochilmadi`);
+    }
   }
 
   function stopPhoneCamera() {
@@ -634,10 +687,17 @@ async function loadFaceMatchForAlert(alertId) {
                       <div style={{
                         position: "absolute", top: "44px", left: 0, zIndex: 999,
                         background: "var(--card-bg, #1e2533)", border: "1px solid #334",
-                        borderRadius: "10px", padding: "10px", minWidth: "260px",
+                        borderRadius: "10px", padding: "12px", minWidth: "280px",
                         boxShadow: "0 8px 24px rgba(0,0,0,0.4)"
                       }}>
                         <p style={{ margin: "0 0 8px", fontSize: "13px", color: "#aaa" }}>Kamera tanlang:</p>
+
+                        {/* Detected devices */}
+                        {cameraDevices.length === 0 && (
+                          <p style={{ fontSize: 12, color: "#666", margin: "4px 0 8px" }}>
+                            Qurilma topilmadi
+                          </p>
+                        )}
                         {cameraDevices.map((d, i) => (
                           <button
                             key={d.deviceId}
@@ -652,8 +712,30 @@ async function loadFaceMatchForAlert(alertId) {
                             📷 {d.label || `Kamera ${i + 1}`}
                           </button>
                         ))}
+
+                        {/* Extra: any index */}
+                        <div style={{ borderTop: "1px solid #334", marginTop: "8px", paddingTop: "8px" }}>
+                          <p style={{ fontSize: 11, color: "#666", margin: "0 0 6px" }}>Yoki index bo'yicha oching:</p>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            {[0, 1, 2, 3].map((idx) => (
+                              <button
+                                key={idx}
+                                onClick={() => startPhoneCameraByIndex(idx)}
+                                style={{
+                                  flex: 1, padding: "6px 0",
+                                  background: "#1e3a5f", border: "1px solid #2563eb",
+                                  borderRadius: "6px", color: "#93c5fd",
+                                  cursor: "pointer", fontSize: 12
+                                }}
+                              >
+                                #{idx}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
                         <button onClick={() => setShowDevicePicker(false)}
-                          style={{ marginTop: "4px", fontSize: "12px", color: "#888", background: "none", border: "none", cursor: "pointer" }}>
+                          style={{ marginTop: "8px", fontSize: "12px", color: "#888", background: "none", border: "none", cursor: "pointer" }}>
                           Bekor qilish
                         </button>
                       </div>
@@ -664,33 +746,55 @@ async function loadFaceMatchForAlert(alertId) {
                   </div>
                 </div>
 
-                <div className="big-camera-box">
-                  {phoneMode ? (
-                    <>
-                      {/* Yashirin video — kadr olish uchun */}
-                      <video
-                        ref={phoneVideoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        style={{ display: "none" }}
-                      />
-                      {/* AI tahlil qilingan natija */}
-                      <img
-                        ref={phoneResultRef}
-                        alt="AI kamera"
-                        style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "8px" }}
-                      />
-                    </>
-                  ) : (
-                    <img src={selectedCamera?.streamUrl} alt={selectedCamera?.name} />
+                {/* Hidden video for phone camera capture */}
+                <video ref={phoneVideoRef} autoPlay playsInline muted style={{ display: "none" }} />
+
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: phoneMode ? "1fr 1fr" : "1fr",
+                  gap: "8px",
+                }}>
+                  {/* CAM-01: Mac AI stream */}
+                  <div style={{ position: "relative" }}>
+                    <div style={{
+                      position: "absolute", top: 8, left: 8, zIndex: 2,
+                      background: "rgba(0,0,0,0.6)", borderRadius: 6,
+                      padding: "2px 8px", fontSize: 11, color: "#4ade80",
+                      fontWeight: 600, letterSpacing: 1,
+                    }}>
+                      ● CAM-01 · AI LIVE
+                    </div>
+                    <div className="big-camera-box" style={{ height: phoneMode ? 280 : undefined }}>
+                      <img src={selectedCamera?.streamUrl} alt={selectedCamera?.name} />
+                    </div>
+                  </div>
+
+                  {/* CAM-02: Phone camera with AI */}
+                  {phoneMode && (
+                    <div style={{ position: "relative" }}>
+                      <div style={{
+                        position: "absolute", top: 8, left: 8, zIndex: 2,
+                        background: "rgba(0,0,0,0.6)", borderRadius: 6,
+                        padding: "2px 8px", fontSize: 11, color: "#60a5fa",
+                        fontWeight: 600, letterSpacing: 1,
+                      }}>
+                        ● CAM-02 · AI LIVE
+                      </div>
+                      <div className="big-camera-box" style={{ height: 280 }}>
+                        <img
+                          ref={phoneResultRef}
+                          alt="Phone AI"
+                          style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 8 }}
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
 
                 <div className="camera-info">
                   <span>ID: {selectedCamera?.id}</span>
-                  <span>Status: {selectedCamera?.status}</span>
-                  <span>Stream: active</span>
+                  <span>Status: {phoneMode ? "CAM-01 + CAM-02 online" : "online"}</span>
+                  <span>AI: active</span>
                 </div>
               </div>
             </div>
