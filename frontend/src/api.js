@@ -137,4 +137,8 @@ getFaceMatchForAlert(alertId) {
   clearReidTracks() {
     return request("/reid/tracks", { method: "DELETE" });
   },
+
+  getNetworkInfo() {
+    return request("/network/info");
+  },
 };

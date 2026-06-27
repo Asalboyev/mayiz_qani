@@ -95,9 +95,14 @@ function OperatorDashboard({ onLogout }) {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter((d) => d.kind === "videoinput");
       setCameraDevices(videoDevices);
-      // Compute local network URL for QR (replace localhost with LAN IP)
-      const url = `${window.location.protocol}//${window.location.hostname}:${window.location.port || 5173}`;
-      setLocalNetUrl(url);
+      // Get real LAN IP from backend so QR code works on phone
+      try {
+        const net = await api.getNetworkInfo();
+        setLocalNetUrl(net.frontend_url);
+      } catch {
+        const url = `${window.location.protocol}//${window.location.hostname}:${window.location.port || 5173}`;
+        setLocalNetUrl(url);
+      }
       setShowDevicePicker(true);
     } catch {
       alert("Kamera ruxsati berilmadi");

@@ -1245,3 +1245,26 @@ def clear_reid_tracks():
     """Clear all Re-ID tracks (reset)."""
     n = reid_service.clear_tracks()
     return {"cleared": n}
+
+
+# =========================
+# NETWORK INFO
+# =========================
+
+@app.get("/network/info")
+def get_network_info():
+    """Return local LAN IP and useful URLs for QR code generation."""
+    import socket
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        lan_ip = s.getsockname()[0]
+        s.close()
+    except Exception:
+        lan_ip = "127.0.0.1"
+    return {
+        "lan_ip": lan_ip,
+        "backend_url": f"http://{lan_ip}:8001",
+        "frontend_url": f"http://{lan_ip}:5173",
+        "phone_cam_url": f"http://{lan_ip}:5173/phone-cam",
+    }
