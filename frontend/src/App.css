@@ -1986,3 +1986,175 @@ html[data-theme="dark"] .image-modal {
     grid-template-columns: 1fr;
   }
 }
+/* ========================
+   MOBILE PHONE (max 480px)
+========================= */
+
+@media (max-width: 480px) {
+  /* Dashboard sidebar: collapse to top nav */
+  .dashboard {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-sidebar {
+    width: 100%;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .dash-sidebar p {
+    display: none;
+  }
+
+  .dash-sidebar h2 {
+    font-size: 15px;
+    margin: 0;
+    flex: 1;
+  }
+
+  .dash-sidebar button {
+    font-size: 12px;
+    padding: 6px 10px;
+    text-align: center;
+  }
+
+  .dash-main {
+    padding: 12px;
+  }
+
+  /* Stats: 2 columns on phone */
+  .stats {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .stat-card {
+    padding: 12px;
+  }
+
+  .stat-card h3 {
+    font-size: 22px;
+  }
+
+  /* Alert & report cards: 1 column */
+  .alert-grid,
+  .report-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  /* Camera layout */
+  .camera-layout {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .camera-main-card {
+    min-height: unset;
+  }
+
+  .big-camera-box {
+    height: 240px;
+  }
+
+  .big-camera-box img,
+  .big-camera-box video {
+    height: 240px;
+    object-fit: cover;
+  }
+
+  /* Camera list: compact */
+  .camera-card {
+    padding: 12px;
+  }
+
+  /* Section head buttons: wrap */
+  .section-head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .section-head > div:last-child {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .section-head button {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  /* Drawer full screen */
+  .detail-drawer {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* Tab navigation: scrollable */
+  .dash-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 4px;
+    padding-bottom: 4px;
+  }
+
+  .dash-tabs button {
+    white-space: nowrap;
+    font-size: 12px;
+    padding: 7px 12px;
+  }
+
+  /* Touch-friendly buttons */
+  button {
+    min-height: 40px;
+  }
+
+  /* Alert card compact */
+  .alert-card,
+  .report-card {
+    padding: 14px;
+  }
+
+  /* FaceID grid: 1 col */
+  .faceid-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Form inputs bigger touch area */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  /* Landing page */
+  .landing h1 {
+    font-size: 28px;
+  }
+
+  .hero-buttons {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .hero-buttons button,
+  .hero-buttons a {
+    width: 100%;
+  }
+
+  /* Two-col always 1-col */
+  .two-col {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Camera modal full screen */
+  .camera-modal {
+    inset: 0;
+    border-radius: 0;
+  }
+}

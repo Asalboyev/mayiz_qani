@@ -1,4 +1,4 @@
-const API_BASE = "http://127.0.0.1:8001";
+const API_BASE = `${window.location.protocol}//${window.location.hostname}:8001`;
 
 async function request(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
