@@ -42,8 +42,8 @@ CAMERA_LON = float(os.getenv("CAMERA_LON", "68.7842"))
 PROCESS_EVERY_N_FRAMES = int(os.getenv("PROCESS_EVERY_N_FRAMES", "2"))
 ALERT_COOLDOWN_SECONDS = float(os.getenv("ALERT_COOLDOWN_SECONDS", "6"))
 
-# Stationary endi asosiy trigger emas
-STATIONARY_SECONDS_TO_ALERT = float(os.getenv("STATIONARY_SECONDS_TO_ALERT", "999"))
+# 7 soniya bir joyda tursa gumondor
+STATIONARY_SECONDS_TO_ALERT = float(os.getenv("STATIONARY_SECONDS_TO_ALERT", "7"))
 
 PHOTO_POSE_SECONDS_TO_ALERT = float(os.getenv("PHOTO_POSE_SECONDS_TO_ALERT", "0.15"))
 CROUCH_SECONDS_TO_ALERT = float(os.getenv("CROUCH_SECONDS_TO_ALERT", "0.15"))
@@ -110,6 +110,12 @@ _baseline_person_height: Optional[float] = None
 _photo_pose_started_at: Optional[float] = None
 _crouch_started_at: Optional[float] = None
 _object_action_started_at: Optional[float] = None
+_loitering_alert_sent = False
+
+# Object drop tracking
+_prev_object_count: int = 0
+_drop_detected_at: Optional[float] = None
+_drop_zone: Optional[Tuple[int, int, int, int]] = None  # x1,y1,x2,y2
 
 _previous_gray: Optional[np.ndarray] = None
 
@@ -318,13 +324,30 @@ def draw_label(frame, x, y, text, bg=(15, 23, 42), fg=(255, 255, 255)):
     draw_text(frame, text, x + 8, y + 18, fg, 0.48, 1)
 
 
-def smart_zoom_display(frame, person_box):
-    if not SMART_ZOOM_ENABLED or person_box is None:
+def smart_zoom_display(frame, person_box, drop_zone=None):
+    if not SMART_ZOOM_ENABLED:
         return frame
 
     h, w = frame.shape[:2]
-    x1, y1, x2, y2, _ = person_box
 
+    # Drop zone bo'lsa — o'sha joyga zoom qil
+    if drop_zone is not None:
+        dx1, dy1, dx2, dy2 = drop_zone
+        pad = 80
+        zx1 = clamp(dx1 - pad, 0, w - 1)
+        zy1 = clamp(dy1 - pad, 0, h - 1)
+        zx2 = clamp(dx2 + pad, 0, w - 1)
+        zy2 = clamp(dy2 + pad, 0, h - 1)
+        if zx2 > zx1 and zy2 > zy1:
+            crop = frame[zy1:zy2, zx1:zx2].copy()
+            zoomed = cv2.resize(crop, (w, h), interpolation=cv2.INTER_LINEAR)
+            draw_label(zoomed, 16, 76, "⚠ DROP ZONE ZOOM", (0, 60, 255), (255, 255, 255))
+            return zoomed
+
+    if person_box is None:
+        return frame
+
+    x1, y1, x2, y2, _ = person_box
     person_w = x2 - x1
     person_h = y2 - y1
 
@@ -341,17 +364,51 @@ def smart_zoom_display(frame, person_box):
 
     crop = frame[zy1:zy2, zx1:zx2].copy()
     zoomed = cv2.resize(crop, (w, h), interpolation=cv2.INTER_LINEAR)
-
-    draw_label(
-        zoomed,
-        16,
-        76,
-        "DIGITAL ZOOM ACTIVE",
-        (255, 180, 0),
-        (0, 0, 0),
-    )
+    draw_label(zoomed, 16, 76, "DIGITAL ZOOM ACTIVE", (255, 180, 0), (0, 0, 0))
 
     return zoomed
+
+
+def detect_object_drop(person_box, objects):
+    """Odam biror narsa tashlaganini aniqlash — object count ko'paysa + crouch"""
+    global _prev_object_count, _drop_detected_at, _drop_zone
+
+    current_count = len(objects)
+
+    if person_box is None:
+        _prev_object_count = 0
+        return False, None
+
+    x1, y1, x2, y2, _ = person_box
+    person_h = y2 - y1
+    lower_y = y1 + int(person_h * 0.6)
+
+    # Pastki zonada yangi object paydo bo'ldimi?
+    drop_found = False
+    new_zone = None
+
+    for obj in objects:
+        ox1, oy1, ox2, oy2, _ = obj
+        obj_cy = (oy1 + oy2) // 2
+        # Object pastki zonada va odam yaqinida
+        if obj_cy >= lower_y and ox1 >= x1 - 60 and ox2 <= x2 + 60:
+            drop_found = True
+            new_zone = (ox1, oy1, ox2, oy2)
+            break
+
+    # Object soni ko'paydi — yangi narsa paydo bo'ldi
+    if current_count > _prev_object_count and drop_found:
+        if _drop_detected_at is None:
+            _drop_detected_at = time.time()
+        _drop_zone = new_zone
+    elif current_count == 0:
+        _drop_detected_at = None
+        _drop_zone = None
+
+    _prev_object_count = current_count
+
+    drop_elapsed = elapsed_since(_drop_detected_at)
+    return drop_elapsed >= 0.5, _drop_zone
 
 
 def open_camera():
@@ -603,6 +660,7 @@ def analyze_behavior(frame, detections):
     global _photo_pose_started_at
     global _crouch_started_at
     global _object_action_started_at
+    global _loitering_alert_sent
     global _last_risk_reasons
     global _last_event_type
     global _last_ai_confidence
@@ -660,10 +718,11 @@ def analyze_behavior(frame, detections):
     raw_crouch = crouch_or_bending_pose(person_box)
     lower_motion = lower_zone_motion_score(frame, person_box)
     object_near_lower = suspicious_object_near_lower_zone(frame, person_box, objects)
+    drop_detected, drop_zone = detect_object_drop(person_box, objects)
 
-   
     raw_object_action = (
         object_near_lower
+        or drop_detected
         or (
             lower_motion >= LOWER_MOTION_THRESHOLD
             and (
@@ -688,54 +747,89 @@ def analyze_behavior(frame, detections):
 
     reasons = []
 
+    # 1. 7 soniya bir joyda — gumondor
+    if stationary_seconds >= STATIONARY_SECONDS_TO_ALERT:
+        reasons.append(
+            f"🔴 Gumondor: shaxs {stationary_seconds:.0f} soniya davomida bir joyda turdi"
+        )
+
+    # 2. Telefon rasm olish
     if photo_pose_detected:
         reasons.append(
-            "Telefon rasm olish pozasida aniqlandi: shaxs obyekt yoki hududni suratga olayotgan bo‘lishi mumkin"
+            "📸 Telefon rasm olish pozasida: shaxs hududni yoki narsani suratga olmoqda"
         )
 
+    # 3. Egilish/bukilish
     if crouch_detected:
         reasons.append(
-            "Shaxs egildi yoki bukildi: pastki zona bilan shubhali harakat kuzatildi"
+            "⬇ Shaxs egildi yoki bukildi: pastki zonada shubhali harakat"
         )
 
-    if object_action_detected:
+    # 4. Narsa tashlash aniqlandi
+    if drop_detected:
         reasons.append(
-            "Yer/stol/devor atrofida mayda harakat aniqlandi: obyekt qo‘yish yoki olish ehtimoli bor"
+            "📦 Narsa tashlash aniqlandi: shaxs yerga yoki pastki zonaga narsa qo’ydi"
+        )
+
+    # 5. Pastki zona harakati
+    if object_action_detected and not drop_detected:
+        reasons.append(
+            "⚠ Pastki zonada harakat: narsa qo’yish yoki olish ehtimoli"
         )
 
     if lower_motion >= LOWER_MOTION_THRESHOLD and (crouch_detected or photo_pose_detected):
-        reasons.append("Pastki zonada tezkor harakat qayd etildi")
+        reasons.append("🔥 Pastki zonada tezkor harakat qayd etildi")
 
-    if object_near_lower:
-        reasons.append("Pastki zona atrofida kichik obyekt aniqlandi")
+    if object_near_lower and not drop_detected:
+        reasons.append("🧩 Pastki zona atrofida kichik obyekt aniqlandi")
 
-    if stationary_seconds >= 2.0 and not reasons:
-        reasons.append(f"Shaxs {stationary_seconds:.1f} soniya davomida hududda qoldi")
+    # Agar hech narsa yo’q bo’lsa va odam harakatsiz tursa
+    if not reasons and stationary_seconds >= 3.0:
+        reasons.append(f"Shaxs {stationary_seconds:.1f}s hududda — kuzatuvda")
 
-    score = 45.0
-    score += yolo_confidence * 12.0
-    score += min(8.0, stationary_seconds * 1.5)
+    # Scoring
+    score = 40.0
+    score += yolo_confidence * 10.0
+    score += min(15.0, stationary_seconds * 2.0)
+
+    if stationary_seconds >= STATIONARY_SECONDS_TO_ALERT:
+        score += 20.0
 
     if photo_pose_detected:
         score += 28.0
 
     if crouch_detected:
-        score += 28.0
+        score += 25.0
+
+    if drop_detected:
+        score += 35.0
 
     if object_action_detected:
-        score += 30.0
+        score += 20.0
 
     if lower_motion >= LOWER_MOTION_THRESHOLD:
         score += 12.0
 
     if object_near_lower:
-        score += 10.0
+        score += 8.0
+
+    # Kombinatsiyalar — yuqori xavf
+    if drop_detected and crouch_detected:
+        score += 15.0
+    if photo_pose_detected and drop_detected:
+        score += 15.0
 
     ai_confidence = min(98.0, score)
 
+    # Event type
     event_type = "normal"
-
-    if photo_pose_detected and (crouch_detected or object_action_detected):
+    if photo_pose_detected and drop_detected:
+        event_type = "photo_during_drop"
+    elif drop_detected and crouch_detected:
+        event_type = "object_drop_confirmed"
+    elif drop_detected:
+        event_type = "object_drop_detected"
+    elif photo_pose_detected and (crouch_detected or object_action_detected):
         event_type = "photo_during_possible_drop"
     elif crouch_detected and object_action_detected:
         event_type = "possible_hidden_drop"
@@ -748,24 +842,29 @@ def analyze_behavior(frame, detections):
     elif stationary_seconds >= STATIONARY_SECONDS_TO_ALERT:
         event_type = "loitering_stationary"
 
-    # Oddiy yurib o‘tishni alert qilmaslik uchun movement filter
+    # Oddiy yurib o’tayotgan odamni alert qilmaslik
     is_walking = (
         move_distance > 18
-     and not raw_crouch
+        and not raw_crouch
         and not raw_photo_pose
-     and not object_near_lower
+        and not object_near_lower
+        and not drop_detected
     )
 
     if is_walking:
-     is_suspicious = False
+        is_suspicious = False
     else:
-     is_suspicious = (
-          stationary_seconds >= STATIONARY_SECONDS_TO_ALERT
-         or (photo_pose_detected and stationary_seconds >= 1.5)
-         or (crouch_detected and object_action_detected)
-         or (photo_pose_detected and crouch_detected)
-         or (photo_pose_detected and object_action_detected)
+        is_suspicious = (
+            stationary_seconds >= STATIONARY_SECONDS_TO_ALERT
+            or drop_detected
+            or (photo_pose_detected and stationary_seconds >= 1.5)
+            or (crouch_detected and object_action_detected)
+            or (photo_pose_detected and crouch_detected)
+            or (photo_pose_detected and object_action_detected)
         )
+
+    # Drop zone ni camera status ga saqlash
+    camera_status["drop_zone"] = drop_zone
     camera_status["photo_pose_detected"] = photo_pose_detected
     camera_status["crouch_detected"] = crouch_detected
     camera_status["object_action_detected"] = object_action_detected
@@ -1294,7 +1393,10 @@ def draw_camera_ui(frame, detections, is_suspicious, ai_confidence, reasons, eve
         event_type,
     )
 
-    if person_box is not None and SMART_ZOOM_ON_PERSON:
+    drop_zone = camera_status.get("drop_zone")
+    if drop_zone and is_suspicious:
+        display = smart_zoom_display(display, person_box, drop_zone=drop_zone)
+    elif person_box is not None and SMART_ZOOM_ON_PERSON:
         display = smart_zoom_display(display, person_box)
 
     cv2.rectangle(display, (0, 0), (w, 54), (8, 12, 18), -1)
