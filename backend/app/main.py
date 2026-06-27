@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from app.services.camera_ai import generate_camera_frames, get_camera_status
+from app.services.camera_ai import generate_camera_frames, get_camera_status, analyze_frame_bytes
 from app.services.telegram_service import send_location, send_message, send_photo
 from app.services.face_match_service import match_face_against_database
 
@@ -1210,4 +1210,21 @@ def camera_stream():
     return StreamingResponse(
         generate_camera_frames(),
         media_type="multipart/x-mixed-replace; boundary=frame",
+    )
+
+
+# =========================
+# PHONE CAMERA AI ANALYSIS
+# =========================
+
+@app.post("/camera/analyze")
+async def analyze_phone_frame(file: UploadFile = File(...)):
+    data = await file.read()
+    result_jpeg = analyze_frame_bytes(data)
+    if result_jpeg is None:
+        raise HTTPException(status_code=500, detail="Frame tahlil qilinmadi")
+    return StreamingResponse(
+        iter([result_jpeg]),
+        media_type="image/jpeg",
+        headers={"Cache-Control": "no-cache"},
     )

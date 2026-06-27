@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 
 function statusText(status) {
@@ -77,6 +77,96 @@ function OperatorDashboard({ onLogout }) {
   const [selectedCameraId, setSelectedCameraId] = useState("CAM-01");
   const [showCameraForm, setShowCameraForm] = useState(false);
   const [zoomCamera, setZoomCamera] = useState(null);
+  const [phoneMode, setPhoneMode] = useState(false);
+  const [cameraDevices, setCameraDevices] = useState([]);
+  const [showDevicePicker, setShowDevicePicker] = useState(false);
+  const phoneVideoRef = useRef(null);
+  const phoneStreamRef = useRef(null);
+  const phoneCanvasRef = useRef(null);
+  const phoneAnalyzeRef = useRef(null);
+  const phoneResultRef = useRef(null);
+
+  async function openDevicePicker() {
+    try {
+      await navigator.mediaDevices.getUserMedia({ video: true });
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter((d) => d.kind === "videoinput");
+      setCameraDevices(videoDevices);
+      setShowDevicePicker(true);
+    } catch {
+      alert("Kamera ruxsati berilmadi");
+    }
+  }
+
+  async function startPhoneCamera(deviceId) {
+    if (phoneStreamRef.current) {
+      phoneStreamRef.current.getTracks().forEach((t) => t.stop());
+    }
+    try {
+      const constraint = deviceId
+        ? { video: { deviceId: { exact: deviceId }, width: 1280, height: 720 }, audio: false }
+        : { video: { facingMode: { ideal: "environment" }, width: 1280, height: 720 }, audio: false };
+      const stream = await navigator.mediaDevices.getUserMedia(constraint);
+      phoneStreamRef.current = stream;
+      setPhoneMode(true);
+      setShowDevicePicker(false);
+      setTimeout(() => {
+        if (phoneVideoRef.current) {
+          phoneVideoRef.current.srcObject = stream;
+          phoneVideoRef.current.onloadedmetadata = () => startPhoneAiLoop();
+        }
+      }, 100);
+    } catch {
+      alert("Kamera ochilmadi");
+    }
+  }
+
+  function startPhoneAiLoop() {
+    const canvas = document.createElement("canvas");
+    phoneCanvasRef.current = canvas;
+    let running = true;
+
+    async function loop() {
+      if (!running || !phoneVideoRef.current) return;
+      const video = phoneVideoRef.current;
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0);
+
+      canvas.toBlob(async (blob) => {
+        if (!blob || !running) return;
+        try {
+          const form = new FormData();
+          form.append("file", blob, "frame.jpg");
+          const res = await fetch(`${api.base}/camera/analyze`, { method: "POST", body: form });
+          if (res.ok && phoneResultRef.current) {
+            const url = URL.createObjectURL(await res.blob());
+            const old = phoneResultRef.current.src;
+            phoneResultRef.current.src = url;
+            if (old && old.startsWith("blob:")) URL.revokeObjectURL(old);
+          }
+        } catch {}
+        if (running) phoneAnalyzeRef.current = setTimeout(loop, 120);
+      }, "image/jpeg", 0.8);
+    }
+
+    phoneAnalyzeRef.current = setTimeout(loop, 200);
+    return () => { running = false; clearTimeout(phoneAnalyzeRef.current); };
+  }
+
+  function stopPhoneCamera() {
+    clearTimeout(phoneAnalyzeRef.current);
+    if (phoneStreamRef.current) {
+      phoneStreamRef.current.getTracks().forEach((t) => t.stop());
+      phoneStreamRef.current = null;
+    }
+    if (phoneResultRef.current?.src?.startsWith("blob:")) {
+      URL.revokeObjectURL(phoneResultRef.current.src);
+    }
+    setPhoneMode(false);
+    setShowDevicePicker(false);
+  }
 
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [selectedReport, setSelectedReport] = useState(null);
@@ -519,13 +609,68 @@ async function loadFaceMatchForAlert(alertId) {
                     <p>{selectedCamera?.location}</p>
                   </div>
 
-                  <button className="secondary" onClick={() => setZoomCamera(selectedCamera)}>
-                    Katta ko‘rish
-                  </button>
+                  <div style={{ display: "flex", gap: "8px", position: "relative" }}>
+                    <button
+                      className="secondary"
+                      onClick={phoneMode ? stopPhoneCamera : openDevicePicker}
+                    >
+                      {phoneMode ? "📵 O’chirish" : "📱 Tashqi kamera"}
+                    </button>
+                    {showDevicePicker && (
+                      <div style={{
+                        position: "absolute", top: "44px", left: 0, zIndex: 999,
+                        background: "var(--card-bg, #1e2533)", border: "1px solid #334",
+                        borderRadius: "10px", padding: "10px", minWidth: "260px",
+                        boxShadow: "0 8px 24px rgba(0,0,0,0.4)"
+                      }}>
+                        <p style={{ margin: "0 0 8px", fontSize: "13px", color: "#aaa" }}>Kamera tanlang:</p>
+                        {cameraDevices.map((d, i) => (
+                          <button
+                            key={d.deviceId}
+                            onClick={() => startPhoneCamera(d.deviceId)}
+                            style={{
+                              display: "block", width: "100%", textAlign: "left",
+                              padding: "8px 10px", marginBottom: "4px",
+                              background: "#2a3448", border: "none", borderRadius: "6px",
+                              color: "#fff", cursor: "pointer", fontSize: "13px"
+                            }}
+                          >
+                            📷 {d.label || `Kamera ${i + 1}`}
+                          </button>
+                        ))}
+                        <button onClick={() => setShowDevicePicker(false)}
+                          style={{ marginTop: "4px", fontSize: "12px", color: "#888", background: "none", border: "none", cursor: "pointer" }}>
+                          Bekor qilish
+                        </button>
+                      </div>
+                    )}
+                    <button className="secondary" onClick={() => setZoomCamera(selectedCamera)}>
+                      Katta ko’rish
+                    </button>
+                  </div>
                 </div>
 
                 <div className="big-camera-box">
-                  <img src={selectedCamera?.streamUrl} alt={selectedCamera?.name} />
+                  {phoneMode ? (
+                    <>
+                      {/* Yashirin video — kadr olish uchun */}
+                      <video
+                        ref={phoneVideoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        style={{ display: "none" }}
+                      />
+                      {/* AI tahlil qilingan natija */}
+                      <img
+                        ref={phoneResultRef}
+                        alt="AI kamera"
+                        style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "8px" }}
+                      />
+                    </>
+                  ) : (
+                    <img src={selectedCamera?.streamUrl} alt={selectedCamera?.name} />
+                  )}
                 </div>
 
                 <div className="camera-info">

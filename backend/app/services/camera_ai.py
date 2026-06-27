@@ -1375,6 +1375,23 @@ def encode_jpeg(frame):
     return buffer.tobytes()
 
 
+def analyze_frame_bytes(jpeg_bytes: bytes):
+    arr = np.frombuffer(jpeg_bytes, np.uint8)
+    frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if frame is None:
+        return None
+
+    detections = find_detections(frame)
+    is_suspicious, ai_confidence, reasons, event_type = analyze_behavior(frame, detections)
+    frame = draw_camera_ui(frame, detections, is_suspicious, ai_confidence, reasons, event_type)
+
+    if is_suspicious:
+        person_box = detections.get("person")
+        start_photo_event(frame.copy(), person_box, ai_confidence, reasons, event_type)
+
+    return encode_jpeg(frame)
+
+
 def mjpeg_frame(jpeg_bytes):
     return (
         b"--frame\r\n"
