@@ -190,6 +190,8 @@ Muhim: bu papkalar GitHubga push qilinmasligi kerak, chunki ichida rasm va local
 
 #### Face matching service
 
+Face matching moduli local FaceNet asosidagi AI pipeline orqali ishlaydi. MTCNN rasm ichidan yuzni topadi, InceptionResnetV1 yuzni embedding vektorga aylantiradi, cosine similarity esa camera’dan olingan yuzni Face ID bazadagi yuzlar bilan solishtirib o‘xshashlik foizini chiqaradi. Agar FaceNet ishlamasa, tizim OpenCV-based fallback similarity usulidan foydalanadi.
+
 Face matching service camera’dan olingan face crop rasmini Face ID bazadagi rasmlar bilan solishtiradi.
 
 Vazifalari:
