@@ -21,7 +21,7 @@ from app.services.face_match_service import match_face_against_database
 load_dotenv()
 
 app = FastAPI(
-    title="SafeDrop AI Backend",
+    title="Mayiz Qani Backend",
     description="Shubhali harakatlarni aniqlash uchun local MVP backend.",
     version="0.4.1",
 )
@@ -549,7 +549,7 @@ async def save_citizen_evidence(file: UploadFile):
 @app.get("/")
 def root():
     return {
-        "name": "SafeDrop AI",
+        "name": "Mayiz Qani",
         "status": "ishlayapti",
         "message": "Backend ishlayapti. /docs sahifasiga kiring.",
     }
@@ -559,7 +559,7 @@ def root():
 def health():
     return {
         "ok": True,
-        "service": "SafeDrop AI Backend",
+        "service": "Mayiz Qani Backend",
         "time": now_iso(),
     }
 
@@ -571,7 +571,7 @@ def health():
 @app.post("/auth/operator-login")
 def operator_login(payload: OperatorLoginRequest):
     demo_users = {
-        "admin": "safedrop123",
+        "admin": "mayizqani123",
         "operator": "operator123",
     }
 
@@ -682,7 +682,7 @@ def create_alert(payload: AlertCreate):
     gallery_count = len(alert.evidence_gallery_urls)
 
     message = f"""
-🚨 <b>SafeDrop AI ogohlantirishi</b>
+🚨 <b>Mayiz Qani ogohlantirishi</b>
 
 <b>Manba:</b> AI kamera
 <b>Kamera:</b> {alert.camera_name}

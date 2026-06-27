@@ -9,16 +9,16 @@ import OperatorDashboard from "./pages/OperatorDashboard";
 function App() {
   const [page, setPage] = useState("landing");
   const [citizen, setCitizen] = useState(() => {
-    const saved = localStorage.getItem("safedrop_citizen");
+    const saved = localStorage.getItem("mayizqani_citizen");
     return saved ? JSON.parse(saved) : null;
   });
 
   const [theme, setTheme] = useState(() => {
-  return localStorage.getItem("safedrop_theme") || "light";
+  return localStorage.getItem("mayizqani_theme") || "light";
 });
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("safedrop_theme", theme);
+    localStorage.setItem("mayizqani_theme", theme);
   }, [theme]);
 
   function toggleTheme() {

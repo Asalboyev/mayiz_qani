@@ -46,7 +46,7 @@ const defaultCameras = [
 
 function loadSavedCameras() {
   try {
-    const saved = localStorage.getItem("safedrop_cameras");
+    const saved = localStorage.getItem("mayizqani_cameras");
     if (!saved) return defaultCameras;
 
     const parsed = JSON.parse(saved);
@@ -271,7 +271,7 @@ async function loadFaceMatchForAlert(alertId) {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("safedrop_cameras", JSON.stringify(cameras));
+    localStorage.setItem("mayizqani_cameras", JSON.stringify(cameras));
   }, [cameras]);
 
   return (
