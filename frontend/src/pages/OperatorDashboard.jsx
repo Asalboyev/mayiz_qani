@@ -80,6 +80,7 @@ function OperatorDashboard({ onLogout }) {
   const [phoneMode, setPhoneMode] = useState(false);
   const [cameraDevices, setCameraDevices] = useState([]);
   const [showDevicePicker, setShowDevicePicker] = useState(false);
+  const [reidTracks, setReidTracks] = useState([]);
   const phoneVideoRef = useRef(null);
   const phoneStreamRef = useRef(null);
   const phoneCanvasRef = useRef(null);
@@ -358,6 +359,19 @@ async function loadFaceMatchForAlert(alertId) {
     loadData();
     const timer = setInterval(loadData, 3000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function pollReid() {
+      try {
+        const data = await api.getReidTracks();
+        if (active) setReidTracks(data.tracks || []);
+      } catch (_) {}
+    }
+    pollReid();
+    const t = setInterval(pollReid, 3000);
+    return () => { active = false; clearInterval(t); };
   }, []);
 
   useEffect(() => {
@@ -679,6 +693,76 @@ async function loadFaceMatchForAlert(alertId) {
                   <span>Stream: active</span>
                 </div>
               </div>
+            </div>
+
+            {/* ─── Multi-Camera Re-ID Panel ─── */}
+            <div className="card" style={{ marginTop: 16 }}>
+              <div className="section-head">
+                <div>
+                  <h3>Multi-Camera Re-ID Tracks</h3>
+                  <p>Bir xil shaxsni bir nechta kamerada kuzatish (appearance matching)</p>
+                </div>
+                <button
+                  className="secondary"
+                  onClick={async () => {
+                    await api.clearReidTracks();
+                    setReidTracks([]);
+                  }}
+                >
+                  Tozalash
+                </button>
+              </div>
+
+              {reidTracks.length === 0 ? (
+                <p style={{ color: "#6b7280", padding: "12px 0" }}>
+                  Hali track yo'q. Kamera oynasida odam ko'rinsa avtomatik boshlanadi.
+                </p>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid #1e293b", color: "#94a3b8" }}>
+                        <th style={{ padding: "6px 8px", textAlign: "left" }}>Track ID</th>
+                        <th style={{ padding: "6px 8px", textAlign: "left" }}>Kameralar</th>
+                        <th style={{ padding: "6px 8px", textAlign: "center" }}>Ko'rishlar</th>
+                        <th style={{ padding: "6px 8px", textAlign: "center" }}>Cross-camera</th>
+                        <th style={{ padding: "6px 8px", textAlign: "left" }}>Oxirgi ko'rish</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reidTracks.map((t) => (
+                        <tr
+                          key={t.track_id}
+                          style={{
+                            borderBottom: "1px solid #0f172a",
+                            background: t.cross_camera ? "rgba(239,68,68,0.08)" : "transparent",
+                          }}
+                        >
+                          <td style={{ padding: "6px 8px", fontFamily: "monospace", color: "#e2e8f0" }}>
+                            {t.track_id}
+                          </td>
+                          <td style={{ padding: "6px 8px", color: "#94a3b8", fontSize: 12 }}>
+                            {t.camera_ids.join(", ")}
+                          </td>
+                          <td style={{ padding: "6px 8px", textAlign: "center", color: "#e2e8f0" }}>
+                            {t.sightings}
+                          </td>
+                          <td style={{ padding: "6px 8px", textAlign: "center" }}>
+                            {t.cross_camera ? (
+                              <span style={{ color: "#ef4444", fontWeight: 600 }}>⚠ HA</span>
+                            ) : (
+                              <span style={{ color: "#22c55e" }}>—</span>
+                            )}
+                          </td>
+                          <td style={{ padding: "6px 8px", color: "#64748b", fontSize: 12 }}>
+                            {new Date(t.last_seen * 1000).toLocaleTimeString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </section>
         )}

@@ -21,6 +21,8 @@ try:
 except Exception:
     YOLO = None
 
+from app.services import reid_service
+
 
 # =========================
 # CONFIG
@@ -151,7 +153,14 @@ camera_status = {
     "event_type": "normal",
     "last_alert_at": None,
     "last_error": None,
+    # Re-ID
+    "reid_track_id": None,
+    "reid_cross_camera": False,
+    "reid_sightings": 0,
 }
+
+# Re-ID current track info for this camera
+_reid_result: Optional[Dict[str, Any]] = None
 
 
 # =========================
@@ -1428,6 +1437,15 @@ def draw_camera_ui(frame, detections, is_suspicious, ai_confidence, reasons, eve
 
     draw_text(display, f"EVENT: {event_type}", panel_x + 16, panel_y + 82, (210, 220, 230), 0.52, 1)
 
+    # Re-ID overlay
+    reid_id = camera_status.get("reid_track_id")
+    reid_cross = camera_status.get("reid_cross_camera", False)
+    reid_sightings = camera_status.get("reid_sightings", 0)
+    if reid_id:
+        reid_color = (0, 80, 255) if reid_cross else (80, 200, 120)
+        reid_text = f"Re-ID: {reid_id}  {'⚠ CROSS-CAMERA' if reid_cross else ''}  seen:{reid_sightings}x"
+        draw_text(display, reid_text, panel_x + 370, panel_y + 82, reid_color, 0.48, 1)
+
     if is_suspicious:
         draw_text(display, f"RISK: CAPTURING PHOTO EVIDENCE  {ai_confidence:.1f}%", panel_x + 16, panel_y + 110, (0, 220, 255), 0.54, 2)
     elif camera_status["photo_event_recording"]:
@@ -1506,7 +1524,7 @@ def mjpeg_frame(jpeg_bytes):
 # =========================
 
 def generate_camera_frames():
-    global _frame_buffer
+    global _frame_buffer, _reid_result
 
     frame_count = 0
 
@@ -1560,6 +1578,22 @@ def generate_camera_frames():
 
             if frame_count % PROCESS_EVERY_N_FRAMES == 0:
                 last_detections = find_detections(frame)
+
+                # Re-ID: track detected person across cameras
+                person_box = last_detections.get("person")
+                if person_box is not None:
+                    x1, y1, x2, y2, _ = person_box
+                    _reid_result = reid_service.update_track(
+                        frame, (x1, y1, x2, y2), camera_id=CAMERA_NAME
+                    )
+                    camera_status["reid_track_id"]     = _reid_result["track_id"]
+                    camera_status["reid_cross_camera"] = _reid_result["cross_camera"]
+                    camera_status["reid_sightings"]    = _reid_result["sightings"]
+                else:
+                    _reid_result = None
+                    camera_status["reid_track_id"]     = None
+                    camera_status["reid_cross_camera"] = False
+                    camera_status["reid_sightings"]    = 0
 
             is_suspicious, ai_confidence, reasons, event_type = analyze_behavior(
                 frame,

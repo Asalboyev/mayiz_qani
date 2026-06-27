@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from app.services.camera_ai import generate_camera_frames, get_camera_status, analyze_frame_bytes
 from app.services.telegram_service import send_location, send_message, send_photo
 from app.services.face_match_service import match_face_against_database
+from app.services import reid_service
 
 
 load_dotenv()
@@ -1228,3 +1229,19 @@ async def analyze_phone_frame(file: UploadFile = File(...)):
         media_type="image/jpeg",
         headers={"Cache-Control": "no-cache"},
     )
+
+# =========================
+# MULTI-CAMERA RE-ID
+# =========================
+
+@app.get("/reid/tracks")
+def get_reid_tracks():
+    """Return all active person tracks across cameras."""
+    return {"tracks": reid_service.get_all_tracks()}
+
+
+@app.delete("/reid/tracks")
+def clear_reid_tracks():
+    """Clear all Re-ID tracks (reset)."""
+    n = reid_service.clear_tracks()
+    return {"cleared": n}

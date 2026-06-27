@@ -129,4 +129,12 @@ getFaceMatchForAlert(alertId) {
       body: JSON.stringify({ phone }),
     });
   },
+
+  getReidTracks() {
+    return request("/reid/tracks");
+  },
+
+  clearReidTracks() {
+    return request("/reid/tracks", { method: "DELETE" });
+  },
 };
