@@ -783,9 +783,32 @@ def analyze_behavior(frame, detections):
 # =========================
 # EVIDENCE
 # =========================
+def annotate_frame_for_evidence(frame, confidence, reasons, event_type):
+    image = frame.copy()
+
+    try:
+        detections = find_detections(image)
+        image = draw_detections(
+            image,
+            detections,
+            True,
+            confidence,
+            reasons or [],
+            event_type,
+        )
+    except Exception as error:
+        camera_status["last_error"] = f"Evidence annotation xatosi: {error}"
+
+    return image
 
 def build_evidence_frame(frame, person_box, reasons, confidence, event_type):
-    evidence = frame.copy()
+    evidence = annotate_frame_for_evidence(
+        frame,
+        confidence,
+        reasons,
+        event_type,
+    )
+
     h, w = evidence.shape[:2]
 
     if person_box is not None:
@@ -860,7 +883,13 @@ def pick_burst_frames(frames: List[np.ndarray], count: int) -> List[np.ndarray]:
 
 
 def build_gallery_frame(frame, index, total, event_type, confidence, reasons):
-    image = frame.copy()
+    image = annotate_frame_for_evidence(
+        frame,
+        confidence,
+        reasons,
+        event_type,
+    )
+
     h, w = image.shape[:2]
 
     panel_x = 14

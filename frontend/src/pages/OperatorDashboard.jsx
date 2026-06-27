@@ -85,6 +85,9 @@ function OperatorDashboard({ onLogout }) {
   const [reviewModal, setReviewModal] = useState(null);
   const [reviewNote, setReviewNote] = useState("");
 
+  const [faceMatch, setFaceMatch] = useState(null);
+  const [faceMatchLoading, setFaceMatchLoading] = useState(false);
+
   const [newCamera, setNewCamera] = useState({
     name: "",
     location: "",
@@ -143,6 +146,38 @@ function OperatorDashboard({ onLogout }) {
       console.error(err);
     }
   }
+  async function loadLatestFaceMatch() {
+  setFaceMatchLoading(true);
+
+  try {
+    const data = await api.getLatestFaceMatch();
+    setFaceMatch(data);
+  } catch (error) {
+    console.error(error);
+    setFaceMatch({
+      ok: false,
+      error: error.message || "Face match yuklanmadi",
+      result: null,
+    });
+  } finally {
+    setFaceMatchLoading(false);
+  }
+}
+
+async function loadFaceMatchForAlert(alertId) {
+  setFaceMatchLoading(true);
+
+  try {
+    const data = await api.getFaceMatchForAlert(alertId);
+    setFaceMatch(data);
+    setTab("faceMatch");
+    setSelectedAlert(null);
+  } catch (error) {
+    alert("Face match qilishda xato: " + error.message);
+  } finally {
+    setFaceMatchLoading(false);
+  }
+}
 
   async function demoAlert() {
     await api.createDemoAlert();
@@ -269,6 +304,15 @@ function OperatorDashboard({ onLogout }) {
         >
           Face ID baza
         </button>
+        <button
+  className={tab === "faceMatch" ? "active" : ""}
+  onClick={() => {
+    setTab("faceMatch");
+    loadLatestFaceMatch();
+  }}
+>
+  AI Face Matchmaking
+</button>
 
         <button onClick={onLogout}>Chiqish</button>
       </aside>
@@ -779,6 +823,150 @@ function OperatorDashboard({ onLogout }) {
 </div>
           </div>
         )}
+        {tab === "faceMatch" && (
+  <div className="card">
+    <div className="section-head">
+      <div>
+        <h3>AI Face Matchmaking</h3>
+        <p>
+          Live camera orqali olingan yuz rasmi Face ID bazadagi rasmlar bilan
+          solishtiriladi.
+        </p>
+      </div>
+
+      <button className="secondary" onClick={loadLatestFaceMatch}>
+        {faceMatchLoading ? "Tekshirilmoqda..." : "Oxirgi alertni tekshirish"}
+      </button>
+    </div>
+
+    {!faceMatch || faceMatchLoading ? (
+      <p className="muted">
+        {faceMatchLoading
+          ? "Face ID bazadan o‘xshashlik qidirilmoqda..."
+          : "Hali face match bajarilmagan."}
+      </p>
+    ) : !faceMatch.ok ? (
+      <div className="empty">
+        <strong>Face match mavjud emas</strong>
+        <p>{faceMatch.error || "Yuz rasmi bor alert hali mavjud emas."}</p>
+      </div>
+    ) : (
+      <div className="face-match-layout">
+        <div className="face-target-card">
+          <span>Camera’dan olingan yuz</span>
+
+          {faceMatch.target_face_image_url ? (
+            <button
+              type="button"
+              className="face-target-photo"
+              onClick={() =>
+                setImageModal(`${api.base}${faceMatch.target_face_image_url}`)
+              }
+            >
+              <img
+                src={`${api.base}${faceMatch.target_face_image_url}`}
+                alt="Target face"
+              />
+            </button>
+          ) : (
+            <div className="no-image">No face</div>
+          )}
+
+          <h4>{faceMatch.camera_name}</h4>
+          <p>{formatTime(faceMatch.created_at)}</p>
+
+          <div className="face-match-tags">
+            <span>{faceMatch.event_type || "unknown_event"}</span>
+            <span>{faceMatch.confidence}%</span>
+          </div>
+        </div>
+
+        <div className="face-results">
+          <div className="face-results-head">
+            <div>
+              <h4>Match natijalari</h4>
+              <p>
+                Engine: {faceMatch.result?.engine || "-"}
+                {faceMatch.result?.facenet_error
+                  ? ` · ${faceMatch.result.facenet_error}`
+                  : ""}
+              </p>
+            </div>
+          </div>
+
+          {faceMatch.result?.best_match ? (
+            <div className="best-match-card">
+              <div className="best-match-label">Eng yaqin moslik</div>
+
+              <div className="best-match-content">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setImageModal(
+                      `${api.base}${faceMatch.result.best_match.face_image_url}`
+                    )
+                  }
+                >
+                  <img
+                    src={`${api.base}${faceMatch.result.best_match.face_image_url}`}
+                    alt={faceMatch.result.best_match.full_name}
+                  />
+                </button>
+
+                <div>
+                  <h3>{faceMatch.result.best_match.full_name}</h3>
+                  <p>{faceMatch.result.best_match.phone || "Telefon yo‘q"}</p>
+
+                  <strong>{faceMatch.result.best_match.score}%</strong>
+                  <span
+                    className={`match-level ${faceMatch.result.best_match.match_level}`}
+                  >
+                    {faceMatch.result.best_match.match_label}
+                  </span>
+
+                  <small>
+                    Source:{" "}
+                    {faceMatch.result.best_match.source === "citizen"
+                      ? "Ro‘yxatdan o‘tgan fuqaro"
+                      : "Operator qo‘shgan baza"}
+                  </small>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="muted">Moslik topilmadi.</p>
+          )}
+
+          <div className="match-list">
+            {(faceMatch.result?.matches || []).map((match) => (
+              <div className="match-row" key={match.id}>
+                <button
+                  type="button"
+                  onClick={() => setImageModal(`${api.base}${match.face_image_url}`)}
+                >
+                  <img src={`${api.base}${match.face_image_url}`} alt={match.full_name} />
+                </button>
+
+                <div>
+                  <strong>{match.full_name}</strong>
+                  <p>{match.phone || "Telefon yo‘q"}</p>
+                  <small>{match.source} · {match.risk_level || "unknown"}</small>
+                </div>
+
+                <div className="match-score">
+                  <b>{match.score}%</b>
+                  <span className={`match-level ${match.match_level}`}>
+                    {match.match_label}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+)}
 
         {zoomCamera && (
           <div className="camera-modal">
@@ -915,6 +1103,11 @@ function OperatorDashboard({ onLogout }) {
               </div>
 
               <div className="actions">
+              {selectedAlert.face_image_url && (
+  <button onClick={() => loadFaceMatchForAlert(selectedAlert.id)}>
+    Face Match
+  </button>
+)}
                 <button onClick={() => openReviewModal("alert", selectedAlert, "tasdiqlandi")}>
                   Tasdiqlash
                 </button>

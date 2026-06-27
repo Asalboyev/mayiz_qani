@@ -1590,6 +1590,258 @@ html[data-theme="dark"] .image-modal {
   background: #000;
 }
 /* =========================
+   AI FACE MATCHMAKING
+========================= */
+
+.face-match-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.face-target-card,
+.face-results {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--card);
+  padding: 16px;
+}
+
+.face-target-card > span {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.face-target-photo {
+  width: 100%;
+  height: 230px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 0;
+  background: #000;
+  cursor: zoom-in;
+}
+
+.face-target-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.face-target-card h4 {
+  margin: 14px 0 4px;
+}
+
+.face-target-card p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.face-match-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.face-match-tags span {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--soft);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.face-results-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.face-results-head h4 {
+  margin: 0 0 4px;
+}
+
+.face-results-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.best-match-card {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--soft);
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.best-match-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+}
+
+.best-match-content {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 14px;
+  align-items: center;
+}
+
+.best-match-content button,
+.match-row button {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 0;
+  background: #000;
+  cursor: zoom-in;
+}
+
+.best-match-content button {
+  width: 110px;
+  height: 110px;
+}
+
+.best-match-content img,
+.match-row img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.best-match-content h3 {
+  margin: 0 0 4px;
+}
+
+.best-match-content p {
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+
+.best-match-content strong {
+  display: block;
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.best-match-content small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+}
+
+.match-level {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.match-level.high {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.match-level.medium {
+  background: rgba(202, 138, 4, 0.14);
+  color: #ca8a04;
+}
+
+.match-level.low {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.match-level.no_match {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.match-list {
+  display: grid;
+  gap: 10px;
+}
+
+.match-row {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 10px;
+}
+
+.match-row button {
+  width: 64px;
+  height: 64px;
+}
+
+.match-row strong {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.match-row p,
+.match-row small {
+  display: block;
+  margin: 0;
+  color: var(--muted);
+}
+
+.match-score {
+  text-align: right;
+}
+
+.match-score b {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 18px;
+}
+
+@media (max-width: 900px) {
+  .face-match-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .face-target-photo {
+    height: 260px;
+  }
+}
+
+@media (max-width: 600px) {
+  .best-match-content,
+  .match-row {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+
+  .best-match-content button,
+  .match-row button {
+    margin: 0 auto;
+  }
+
+  .match-score {
+    text-align: center;
+  }
+}
+/* =========================
    RESPONSIVE — MOBILE (≤ 700px)
 ========================= */
 

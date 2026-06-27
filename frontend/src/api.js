@@ -101,6 +101,13 @@ export const api = {
   getFaceIdRecords(source = "all") {
     return request(`/faceid/records?source=${source}`);
   },
+  getLatestFaceMatch() {
+  return request("/face-match/latest");
+},
+
+getFaceMatchForAlert(alertId) {
+  return request(`/face-match/alerts/${alertId}`);
+},
 
   createFaceIdRecord(payload) {
     return request("/faceid/records", {

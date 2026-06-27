@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from app.services.camera_ai import generate_camera_frames, get_camera_status
 from app.services.telegram_service import send_location, send_message, send_photo
+from app.services.face_match_service import match_face_against_database
 
 
 load_dotenv()
@@ -180,6 +181,69 @@ class FaceIdRecordCreate(BaseModel):
     note: Optional[str] = Field(default=None)
     face_image: str
 
+# =========================
+# AI FACE MATCHMAKING
+# =========================
+
+@app.get("/face-match/alerts/{alert_id}")
+def get_face_match_for_alert(alert_id: str):
+    for alert in alerts:
+        if alert.id == alert_id:
+            if not alert.face_image_url and not alert.face_image_path:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Bu alertda yuz rasmi topilmadi",
+                )
+
+            result = match_face_against_database(
+                target_face_image_url=alert.face_image_url,
+                target_face_image_path=alert.face_image_path,
+                limit=10,
+            )
+
+            return {
+                "ok": result.get("ok", False),
+                "alert_id": alert.id,
+                "created_at": alert.created_at,
+                "camera_name": alert.camera_name,
+                "event_type": alert.event_type,
+                "confidence": alert.confidence,
+                "target_face_image_url": alert.face_image_url,
+                "result": result,
+            }
+
+    raise HTTPException(
+        status_code=404,
+        detail="Alert topilmadi",
+    )
+
+
+@app.get("/face-match/latest")
+def get_latest_face_match():
+    for alert in reversed(alerts):
+        if alert.face_image_url or alert.face_image_path:
+            result = match_face_against_database(
+                target_face_image_url=alert.face_image_url,
+                target_face_image_path=alert.face_image_path,
+                limit=10,
+            )
+
+            return {
+                "ok": result.get("ok", False),
+                "alert_id": alert.id,
+                "created_at": alert.created_at,
+                "camera_name": alert.camera_name,
+                "event_type": alert.event_type,
+                "confidence": alert.confidence,
+                "target_face_image_url": alert.face_image_url,
+                "result": result,
+            }
+
+    return {
+        "ok": False,
+        "error": "Yuz rasmi bor alert hali mavjud emas",
+        "result": None,
+    }
 
 # =========================
 # OPERATOR AUTH MODELS
