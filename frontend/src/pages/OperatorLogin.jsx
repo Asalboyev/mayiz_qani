@@ -3,7 +3,7 @@ import { api } from "../api";
 
 function OperatorLogin({ onBack, onLogin }) {
   const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("mayizqani123");
+  const [password, setPassword] = useState("safedrop123");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -52,7 +52,7 @@ function OperatorLogin({ onBack, onLogin }) {
           {loading ? "Tekshirilmoqda..." : "Kirish"}
         </button>
 
-        <small>Demo: admin / mayizqani123</small>
+        <small>Demo: admin / safedrop123</small>
       </form>
     </div>
   );

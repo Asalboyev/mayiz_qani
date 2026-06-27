@@ -46,7 +46,7 @@ const defaultCameras = [
 
 function loadSavedCameras() {
   try {
-    const saved = localStorage.getItem("mayizqani_cameras");
+    const saved = localStorage.getItem("safedrop_cameras");
     if (!saved) return defaultCameras;
 
     const parsed = JSON.parse(saved);
@@ -271,13 +271,13 @@ async function loadFaceMatchForAlert(alertId) {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("mayizqani_cameras", JSON.stringify(cameras));
+    localStorage.setItem("safedrop_cameras", JSON.stringify(cameras));
   }, [cameras]);
 
   return (
     <div className="dashboard">
       <aside className="dash-sidebar">
-        <h2>Mayiz Qani</h2>
+        <h2>SafeDrop AI</h2>
         <p>Operator console</p>
 
         <button className={tab === "ai" ? "active" : ""} onClick={() => setTab("ai")}>

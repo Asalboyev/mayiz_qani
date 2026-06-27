@@ -116,7 +116,7 @@ function Landing({ onCitizenLogin, onOperator }) {
     const image = canvas.toDataURL("image/jpeg", 0.9);
 
     setFaceImage(image);
-    localStorage.setItem("mayizqani_last_face_image", image);
+    localStorage.setItem("safedrop_last_face_image", image);
 
     stopFaceCamera();
   }
@@ -125,7 +125,7 @@ function Landing({ onCitizenLogin, onOperator }) {
     setFaceImage("");
     setCameraError("");
     setError("");
-    localStorage.removeItem("mayizqani_last_face_image");
+    localStorage.removeItem("safedrop_last_face_image");
   }
 
   async function registerCitizen(e) {
@@ -157,9 +157,9 @@ function Landing({ onCitizenLogin, onOperator }) {
         face_image: `${api.base}${data.citizen.face_image_url}`,
       };
 
-      localStorage.setItem("mayizqani_citizen", JSON.stringify(user));
-      localStorage.setItem("mayizqani_face_id", user.face_id);
-      localStorage.setItem("mayizqani_face_image", user.face_image);
+      localStorage.setItem("safedrop_citizen", JSON.stringify(user));
+      localStorage.setItem("safedrop_face_id", user.face_id);
+      localStorage.setItem("safedrop_face_image", user.face_image);
 
       onCitizenLogin(user);
     } catch (err) {
@@ -186,9 +186,9 @@ function Landing({ onCitizenLogin, onOperator }) {
         face_image: `${api.base}${data.citizen.face_image_url}`,
       };
 
-      localStorage.setItem("mayizqani_citizen", JSON.stringify(user));
-      localStorage.setItem("mayizqani_face_id", user.face_id);
-      localStorage.setItem("mayizqani_face_image", user.face_image);
+      localStorage.setItem("safedrop_citizen", JSON.stringify(user));
+      localStorage.setItem("safedrop_face_id", user.face_id);
+      localStorage.setItem("safedrop_face_image", user.face_image);
 
       onCitizenLogin(user);
     } catch (err) {
@@ -216,7 +216,7 @@ function Landing({ onCitizenLogin, onOperator }) {
       <div className="landing-box auth-box">
         <div className="logo">SD</div>
 
-        <h1>Mayiz Qani</h1>
+        <h1>SafeDrop AI</h1>
         
 
         <div className="auth-tabs">
