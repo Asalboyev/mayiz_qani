@@ -754,33 +754,18 @@ async function loadFaceMatchForAlert(alertId) {
                   gridTemplateColumns: phoneMode ? "1fr 1fr" : "1fr",
                   gap: "8px",
                 }}>
-                  {/* CAM-01: Mac AI stream */}
-                  <div style={{ position: "relative" }}>
-                    <div style={{
-                      position: "absolute", top: 8, left: 8, zIndex: 2,
-                      background: "rgba(0,0,0,0.6)", borderRadius: 6,
-                      padding: "2px 8px", fontSize: 11, color: "#4ade80",
-                      fontWeight: 600, letterSpacing: 1,
-                    }}>
-                      ● CAM-01 · AI LIVE
-                    </div>
-                    <div className="big-camera-box" style={{ height: phoneMode ? 280 : undefined }}>
-                      <img src={selectedCamera?.streamUrl} alt={selectedCamera?.name} />
-                    </div>
-                  </div>
-
-                  {/* CAM-02: Phone camera with AI */}
+                  {/* CAM-01: Phone camera with AI (main slot) */}
                   {phoneMode && (
                     <div style={{ position: "relative" }}>
                       <div style={{
                         position: "absolute", top: 8, left: 8, zIndex: 2,
-                        background: "rgba(0,0,0,0.6)", borderRadius: 6,
-                        padding: "2px 8px", fontSize: 11, color: "#60a5fa",
-                        fontWeight: 600, letterSpacing: 1,
+                        background: "rgba(0,0,0,0.85)", borderRadius: 6,
+                        padding: "2px 10px", fontSize: 11, color: "#60a5fa",
+                        fontWeight: 700, letterSpacing: 1,
                       }}>
-                        ● CAM-02 · AI LIVE
+                        ● CAM-01 · TELEFON · AI LIVE
                       </div>
-                      <div className="big-camera-box" style={{ height: 280 }}>
+                      <div className="big-camera-box" style={{ height: 320 }}>
                         <img
                           ref={phoneResultRef}
                           alt="Phone AI"
@@ -789,6 +774,21 @@ async function loadFaceMatchForAlert(alertId) {
                       </div>
                     </div>
                   )}
+
+                  {/* CAM-02: Mac backend AI stream */}
+                  <div style={{ position: "relative" }}>
+                    <div style={{
+                      position: "absolute", top: 8, left: 8, zIndex: 2,
+                      background: "rgba(0,0,0,0.85)", borderRadius: 6,
+                      padding: "2px 10px", fontSize: 11, color: "#4ade80",
+                      fontWeight: 700, letterSpacing: 1,
+                    }}>
+                      ● {phoneMode ? "CAM-02" : "CAM-01"} · MAC · AI LIVE
+                    </div>
+                    <div className="big-camera-box" style={{ height: phoneMode ? 320 : undefined }}>
+                      <img src={selectedCamera?.streamUrl} alt={selectedCamera?.name} />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="camera-info">
